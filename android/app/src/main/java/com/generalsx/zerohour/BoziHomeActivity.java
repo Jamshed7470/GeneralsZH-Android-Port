@@ -47,6 +47,10 @@ public class BoziHomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshPlayButton();
+        // Вернулись из игры — партия закончилась, сессия снова открыта для
+        // входа. Состояние на сервере переключаем здесь, а не в момент выхода
+        // из игры: экран игры принадлежит движку, и события выхода у нас нет.
+        reportSessionState("lobby");
     }
 
     private void build() {
@@ -247,12 +251,30 @@ public class BoziHomeActivity extends Activity {
             statusLine.setText("Сначала установите игру");
             return;
         }
+        reportSessionState("playing");
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             startActivity(new Intent(this, GeneralsZHActivity.class));
             return;
         }
         pendingLaunchAfterRotation = true;
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+    }
+
+    /**
+     * Отмечает состояние своей сессии, если игрок в ней хозяин.
+     *
+     * <p>Тихо: не получилось — значит, игрок просто не в сессии или сеть
+     * моргнула, и ни то ни другое не повод мешать ему играть.
+     */
+    private void reportSessionState(String state) {
+        String code = BoziTunnel.get().status().code;
+        if (code.isEmpty()) return;
+        new Thread(() -> {
+            try {
+                new BoziApi(this).setSessionState(code, state);
+            } catch (Exception ignored) {
+            }
+        }, "bozi-state").start();
     }
 
     @Override
