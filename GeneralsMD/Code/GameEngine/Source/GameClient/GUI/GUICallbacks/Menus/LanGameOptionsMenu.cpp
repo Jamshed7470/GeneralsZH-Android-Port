@@ -708,7 +708,19 @@ void InitLanGameGadgets()
   DEBUG_ASSERTCRASH(checkboxLimitSuperweapons, ("Could not find the checkboxLimitSuperweapons"));
   comboBoxStartingCash = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxStartingCashID );
   DEBUG_ASSERTCRASH(comboBoxStartingCash, ("Could not find the comboBoxStartingCash"));
-	PopulateStartingCashComboBox(comboBoxStartingCash, TheLAN->GetMyGame());
+	// GeneralsX @bugfix Android port 20/09/2026 A missing widget must not take the
+	// process with it. DEBUG_ASSERTCRASH compiles away in a release build, so a layout
+	// without ComboBoxStartingCash left a null pointer to be dereferenced one line
+	// later: PopulateStartingCashComboBox() -> GameWindow::winGetEnabled() -> SIGSEGV
+	// at address 0x8, the instant the LAN game-options screen opened. That is not
+	// hypothetical -- Zero Hour's own LanGameOptionsMenu.wnd has this combo and the
+	// base Generals one does not, so any install where the base archive wins the
+	// lookup (a merged data folder, an older mod that ships its own Window.big)
+	// crashed here with no message at all. The starting-cash selector is optional
+	// furniture; the screen works without it.
+	if (comboBoxStartingCash != NULL) {
+		PopulateStartingCashComboBox(comboBoxStartingCash, TheLAN->GetMyGame());
+	}
 
 	windowMap = TheWindowManager->winGetWindowFromId( parentLanGameOptions,windowMapID  );
 	DEBUG_ASSERTCRASH(windowMap, ("Could not find the LanGameOptionsMenu.wnd:MapWindow" ));
