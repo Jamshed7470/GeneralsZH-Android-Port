@@ -409,6 +409,28 @@ const Uint64 SELECT_HOLD_MS = 250;
 // stationary-hold tremor while waiting out LONG_PRESS_MS for a long-press.
 const float TAP_DEAD_ZONE_PX = 16.0f;
 
+// GeneralsX @bugfix Android port 20/09/2026 16px was measured on the screen this
+// constant was written against, and it is too tight for a modern phone: at 2400x1080
+// on a 6.7" panel it is about a millimetre, well inside the travel of an ordinary
+// tap, so taps kept arriving as drags. Android's own slop is a physical distance
+// (8dp), not a pixel count, and the engine does not know the panel's DPI -- but the
+// logical resolution tracks it closely enough in practice, so scale by the shorter
+// side and keep the original value as the floor for small windows.
+float tapDeadZonePx()
+{
+	float zone = TAP_DEAD_ZONE_PX;
+	if (TheDisplay) {
+		const float w = (float)TheDisplay->getWidth();
+		const float h = (float)TheDisplay->getHeight();
+		const float shorter = (w < h) ? w : h;
+		const float byScreen = 0.02f * shorter;
+		if (byScreen > zone) {
+			zone = byScreen;
+		}
+	}
+	return zone;
+}
+
 // Double-tap: select all of the clicked unit's type on screen, matching the
 // PC's double-click. 350ms/40px roughly matches Android's own
 // ViewConfiguration.getDoubleTapTimeout() plus slack for finger imprecision
@@ -1113,7 +1135,27 @@ void handleTouchEvent(SDL_Window *window, const SDL_Event &event)
 
 		if (s_touch.phase == TouchState::PENDING && event.tfinger.fingerID == s_touch.finger1) {
 			const float moved = SDL_fabsf(px - s_touch.downX) + SDL_fabsf(py - s_touch.downY);
-			if (moved >= TAP_DEAD_ZONE_PX) {
+			// GeneralsX @bugfix Android port 20/09/2026 A finger that landed on a widget
+			// the window manager owns keeps its tap however far it slides. Reported: in
+			// the LAN "Game Options" screen the starting-cash combo could not be changed
+			// -- $50000 was unreachable. The dropdown list is not a GWS_PUSH_BUTTON leaf,
+			// so the touch takes the PENDING path (isRealUiHit() is deliberately narrow),
+			// and PENDING hands any motion past the dead zone to the camera-pan
+			// classifier. A real finger always travels a few pixels, and in the shell the
+			// pan is then discarded outright, so the press simply vanished: nothing
+			// selected the item and nothing closed the list. Synthetic input with no
+			// travel at all (adb shell input tap) selected the same item every time,
+			// which is what made this look like a widget bug rather than a gesture one.
+			//
+			// A pan cannot begin on a widget in the first place -- the mouse reaches the
+			// camera through the world, never through a window the manager would claim --
+			// so the question here is not "did the finger move" but "did it start on
+			// something that owns it". touchPointBelongsToUi() is already that question,
+			// and it is the same test the release path below uses. Staying PENDING means
+			// that release path replays hover+down+up at the press point, which is exactly
+			// what the widget expects.
+			const Bool startedOnUi = touchPointBelongsToUi(s_touch.downX, s_touch.downY);
+			if (moved >= tapDeadZonePx() && !startedOnUi) {
 				if (TheInGameUI && TheInGameUI->getPendingPlaceType()) {
 					// GeneralsX @feature Android port 02/08/2026 Building
 					// placement: a drag past the dead zone while a build is
@@ -1526,7 +1568,7 @@ void handleTouchEvent(SDL_Window *window, const SDL_Event &event)
 						// what "get me out of here" looks like on a touchscreen.
 						const float movedFromDown = SDL_fabsf(px - s_touch.downX) + SDL_fabsf(py - s_touch.downY);
 						if ((SDL_GetTicks() - s_touch.downTicks) >= LONG_PRESS_MS &&
-						    movedFromDown < TAP_DEAD_ZONE_PX) {
+						    movedFromDown < tapDeadZonePx()) {
 							TouchInput::cancelOrDeselect();
 						} else {
 							// GeneralsX @bugfix Android port 07/09/2026 An armed command commits
