@@ -501,6 +501,16 @@ public final class BoziApi {
         return membership(requestObject("POST", "/v1/rooms", body));
     }
 
+    /**
+     * Сообщает серверу, что партия началась или вернулась к сбору.
+     *
+     * <p>Отсюда лобби знает, к кому ещё можно присоединиться, а к кому поздно,
+     * и по этому же признаку админка считает, сколько игроков сейчас в бою.
+     */
+    public void setSessionState(String code, String state) throws IOException {
+        requestObject("POST", "/v1/rooms/" + code + "/status", json("state", state));
+    }
+
     public Membership joinSession(String code, String key, String nick) throws IOException {
         return membership(requestObject("POST", "/v1/rooms/" + code + "/join", json("key", key, "nick", nick)));
     }
