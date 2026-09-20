@@ -3,11 +3,13 @@ package com.generalsx.zerohour;
 import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -45,8 +47,25 @@ final class BoziUi {
         scroll.setFillViewport(true);
         LinearLayout column = new LinearLayout(a);
         column.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(a, 20);
-        column.setPadding(pad, dp(a, 28), pad, pad);
+        final int pad = dp(a, 20);
+        final int top = dp(a, 28);
+        column.setPadding(pad, top, pad, pad);
+
+        // Нижнюю кнопку списка перекрывала системная панель навигации: нажатие
+        // уходило ей, а не приложению. Спрашиваем у системы реальную высоту
+        // панели и добавляем её к отступу — на телефонах с жестами она одна, с
+        // тремя кнопками другая, и зашитое число ошибётся на одном из них.
+        scroll.setOnApplyWindowInsetsListener((view, insets) -> {
+            int bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                bottom = insets.getInsets(WindowInsets.Type.systemBars()).bottom;
+            } else {
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            column.setPadding(pad, top, pad, pad + bottom);
+            return insets;
+        });
+
         scroll.addView(column, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         a.setContentView(scroll);
