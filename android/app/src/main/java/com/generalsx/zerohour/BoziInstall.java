@@ -113,11 +113,8 @@ public final class BoziInstall {
             throw new IOException("не хватает места: нужно около " + (needed / (1024 * 1024)) + " МБ");
         }
 
-        listener.onStage("Скачиваем", 0, game.sizeBytes);
-        String declaredSum = api.download(game.id, archive, (done, total) -> {
-            listener.onStage("Скачиваем", done, total);
-            return listener.keepGoing();
-        });
+        listener.onStage("Скачиваем", archive.length(), game.sizeBytes);
+        String declaredSum = downloadWithResume(api, game, archive, listener);
 
         if (!declaredSum.isEmpty()) {
             listener.onStage("Проверяем", 0, archive.length());
@@ -146,6 +143,49 @@ public final class BoziInstall {
 
         listener.onStage("Настраиваем", 0, 0);
         configure(context, target);
+    }
+
+    /**
+     * Скачивает архив, переживая обрывы связи.
+     *
+     * <p>Полгигабайта по мобильной сети редко доходят с первой попытки: связь
+     * рвётся, и без докачки игрок раз за разом начинал бы всё заново. Сервер
+     * поддерживает докачку по диапазону, поэтому каждая следующая попытка
+     * продолжает с того места, где оборвалось.
+     *
+     * <p>Сдаёмся не по числу обрывов, а по отсутствию продвижения: пока файл
+     * растёт, попытки бесплатны для игрока и оправданы. Несколько попыток
+     * подряд без единого нового байта означают, что дело не в связи.
+     */
+    private static String downloadWithResume(BoziApi api, BoziApi.Game game, File archive,
+                                             Listener listener) throws IOException {
+        final int maxStalled = 5;
+        int stalled = 0;
+        IOException last = null;
+        while (listener.keepGoing()) {
+            long before = archive.length();
+            try {
+                return api.download(game.id, archive, (done, total) -> {
+                    listener.onStage("Скачиваем", done, total);
+                    return listener.keepGoing();
+                });
+            } catch (IOException e) {
+                last = e;
+                if (!listener.keepGoing()) break;
+                long after = archive.length();
+                stalled = after > before ? 0 : stalled + 1;
+                if (stalled >= maxStalled) break;
+                listener.onStage("Связь оборвалась, продолжаем", after, game.sizeBytes);
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        if (last != null) throw last;
+        throw new IOException("загрузка отменена");
     }
 
     private static String sha256(File file, Listener listener) throws IOException {
