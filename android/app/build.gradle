@@ -158,6 +158,11 @@ dependencies {
     // BOZI распаковывает игры прямо на телефоне: архивы раздачи — tar+zstd.
     // Zstd выбран не случайно: гигабайт игровых данных он жмёт заметно лучше
     // zip при распаковке в разы быстрее xz, а трафик у игроков мобильный.
+    // Сетевая часть BOZI: WireGuard, пробивка NAT и ретранслятор, собранные
+    // из Go через gomobile. Лежит файлом, а не в репозитории пакетов, потому
+    // что собирается здесь же, вместе с сервером.
+    implementation files('libs/glnet.aar')
+
     implementation 'org.apache.commons:commons-compress:1.20'
     implementation 'com.github.luben:zstd-jni:1.5.2-3@aar'
 }
