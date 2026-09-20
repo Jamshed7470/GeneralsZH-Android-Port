@@ -154,5 +154,11 @@ dependencies {
     // WindowInsetsCompat (InsetUtil.java) -- pulled in transitively by
     // Material already, but declared directly since we call its APIs.
     implementation 'androidx.core:core:1.13.1'
+
+    // BOZI распаковывает игры прямо на телефоне: архивы раздачи — tar+zstd.
+    // Zstd выбран не случайно: гигабайт игровых данных он жмёт заметно лучше
+    // zip при распаковке в разы быстрее xz, а трафик у игроков мобильный.
+    implementation 'org.apache.commons:commons-compress:1.20'
+    implementation 'com.github.luben:zstd-jni:1.5.2-3@aar'
 }
 
