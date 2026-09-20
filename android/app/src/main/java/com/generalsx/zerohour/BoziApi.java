@@ -312,7 +312,11 @@ public final class BoziApi {
                 long done = have;
                 long lastTick = 0;
                 int n;
-                while ((n = in.read(buf)) > 0) {
+                // Обрыв посреди чтения — обычное дело на мобильной сети. Наружу
+                // он уходит своим текстом («unexpected end of stream» и прочие
+                // сообщения системной библиотеки игроку ничего не говорят), а
+                // докачивать умеет вызывающий: файл остаётся на месте.
+                while ((n = readOrExplain(in, buf)) > 0) {
                     out.write(buf, 0, n);
                     done += n;
                     // Обновлять полоску на каждый блок незачем: 64 КБ на
@@ -329,6 +333,15 @@ public final class BoziApi {
             return declaredSum == null ? "" : declaredSum;
         } finally {
             conn.disconnect();
+        }
+    }
+
+    /** Чтение с переводом сетевой ошибки на человеческий язык. */
+    private static int readOrExplain(InputStream in, byte[] buf) throws IOException {
+        try {
+            return in.read(buf);
+        } catch (IOException e) {
+            throw new ApiException(0, "связь оборвалась — продолжим с этого места");
         }
     }
 
