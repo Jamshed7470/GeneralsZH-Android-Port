@@ -2,6 +2,8 @@ package com.generalsx.zerohour;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.net.VpnService;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,9 +36,13 @@ public class BoziLobbyActivity extends Activity {
     private EditText chatInput;
     private TextView statusLine;
 
+    private static final int REQUEST_VPN = 7001;
+
     private volatile boolean running;
     private volatile long chatSince;
     private String myCode = "";
+    private TextView tunnelLine;
+    private LinearLayout tunnelBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +78,11 @@ public class BoziLobbyActivity extends Activity {
 
         BoziUi.button(this, root, "Создать сессию", true, v -> askCreate());
         BoziUi.button(this, root, "Войти по коду", false, v -> askJoin());
+
+        BoziUi.sectionTitle(this, root, "Ваша сессия");
+        tunnelBox = BoziUi.card(this, root);
+        tunnelLine = BoziUi.label(this, tunnelBox, "Вы пока не в сессии.", BoziUi.MUTED);
+        BoziUi.button(this, tunnelBox, "Выйти из сессии", false, v -> leaveSession());
 
         BoziUi.sectionTitle(this, root, "Открытые сессии");
         sessionsBox = new LinearLayout(this);
@@ -115,7 +126,11 @@ public class BoziLobbyActivity extends Activity {
             try {
                 BoziApi api = new BoziApi(this);
                 BoziApi.Lobby lobby = api.lobby();
-                ui.post(() -> showLobby(lobby));
+                BoziTunnel.Status tunnel = BoziTunnel.get().status();
+                ui.post(() -> {
+                    showLobby(lobby);
+                    showTunnel(tunnel);
+                });
             } catch (Exception e) {
                 String text = BoziAuthActivity.message(e);
                 ui.post(() -> statusLine.setText(text));
@@ -238,15 +253,15 @@ public class BoziLobbyActivity extends Activity {
         statusLine.setText("Создаём сессию…");
         new Thread(() -> {
             try {
-                BoziApi api = new BoziApi(this);
-                BoziApi.Membership m = api.createSession("zerohour", BoziTunnel.publicKey(this),
-                        BoziConfig.login(this), title, open);
-                myCode = m.code;
+                String code = BoziTunnel.get().hostGame(this, BoziConfig.login(this),
+                        "zerohour", title, open);
+                myCode = code;
                 chatSince = 0;
                 ui.post(() -> {
                     chatBox.removeAllViews();
-                    statusLine.setText("Сессия создана. Код: " + m.code);
-                    showCode(m.code, open);
+                    statusLine.setText("Сессия создана. Код: " + code);
+                    showCode(code, open);
+                    startTunnel();
                 });
             } catch (Exception e) {
                 String text = BoziAuthActivity.message(e);
@@ -272,20 +287,79 @@ public class BoziLobbyActivity extends Activity {
         statusLine.setText("Входим в сессию…");
         new Thread(() -> {
             try {
-                BoziApi api = new BoziApi(this);
-                BoziApi.Membership m = api.joinSession(code, BoziTunnel.publicKey(this),
-                        BoziConfig.login(this));
-                myCode = m.code;
+                BoziTunnel.get().joinGame(this, code, BoziConfig.login(this));
+                myCode = BoziTunnel.get().status().code;
                 chatSince = 0;
                 ui.post(() -> {
                     chatBox.removeAllViews();
-                    statusLine.setText("Вы в сессии " + m.code + ", ваш адрес " + m.vip);
+                    statusLine.setText("Вы в сессии " + myCode);
+                    startTunnel();
                 });
             } catch (Exception e) {
                 String text = BoziAuthActivity.message(e);
                 ui.post(() -> statusLine.setText(text));
             }
         }, "bozi-join").start();
+    }
+
+    // --- туннель ---
+
+    /**
+     * Просит разрешение на туннель и поднимает его.
+     *
+     * <p>Разрешение на VPN система спрашивает у самого игрока, обойти диалог
+     * нельзя. Если разрешение уже давали, prepare() вернёт null и сервис
+     * запускается сразу.
+     */
+    private void startTunnel() {
+        Intent consent = VpnService.prepare(this);
+        if (consent != null) {
+            startActivityForResult(consent, REQUEST_VPN);
+            return;
+        }
+        BoziVpnService.start(this);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_VPN) {
+            if (resultCode == RESULT_OK) {
+                BoziVpnService.start(this);
+            } else {
+                statusLine.setText("Без разрешения на туннель игра по сети не заработает");
+            }
+        }
+    }
+
+    private void leaveSession() {
+        BoziVpnService.stop(this);
+        BoziTunnel.get().stop();
+        myCode = "";
+        chatSince = 0;
+        chatBox.removeAllViews();
+        tunnelLine.setText("Вы пока не в сессии.");
+        statusLine.setText("Вы вышли из сессии");
+    }
+
+    /** Показывает, как идёт связь с каждым соперником. */
+    private void showTunnel(BoziTunnel.Status status) {
+        if (!status.hasRoom()) {
+            tunnelLine.setText(status.error.isEmpty() ? "Вы пока не в сессии." : status.error);
+            return;
+        }
+        StringBuilder text = new StringBuilder();
+        text.append("Код ").append(status.code);
+        if (!status.vip.isEmpty()) text.append(" · ваш адрес ").append(status.vip);
+        text.append(status.host ? " · вы хозяин" : " · вы гость");
+        text.append(BoziTunnel.get().tunnelStarted() ? "\nТуннель включён" : "\nТуннель ещё не включён");
+        for (BoziTunnel.Peer peer : status.peers) {
+            text.append("\n").append(peer.nick).append(" — ");
+            text.append(peer.online ? peer.path : "не в сети");
+            String latency = peer.latencyText();
+            if (!latency.isEmpty()) text.append(", ").append(latency);
+        }
+        tunnelLine.setText(text.toString());
     }
 
     private void showCode(String code, boolean open) {
