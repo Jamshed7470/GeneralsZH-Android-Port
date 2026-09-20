@@ -16,6 +16,8 @@ public final class BoziConfig {
 
     public static final String DEFAULT_HOST = "194.124.250.108";
     public static final int DEFAULT_API_PORT = 7443;
+    /** Порт ретранслятора: через него идут пакеты игры, когда прямой путь закрыт. */
+    public static final int DEFAULT_RELAY_PORT = 7777;
 
     /**
      * Отпечаток сертификата сервера.
@@ -32,6 +34,7 @@ public final class BoziConfig {
 
     private static final String KEY_HOST = "host";
     private static final String KEY_PORT = "port";
+    private static final String KEY_RELAY_PORT = "relayPort";
     private static final String KEY_FINGERPRINT = "fingerprint";
     private static final String KEY_TOKEN = "token";
     private static final String KEY_LOGIN = "login";
@@ -48,6 +51,10 @@ public final class BoziConfig {
 
     public static int port(Context context) {
         return prefs(context).getInt(KEY_PORT, DEFAULT_API_PORT);
+    }
+
+    public static int relayPort(Context context) {
+        return prefs(context).getInt(KEY_RELAY_PORT, DEFAULT_RELAY_PORT);
     }
 
     public static String fingerprint(Context context) {
