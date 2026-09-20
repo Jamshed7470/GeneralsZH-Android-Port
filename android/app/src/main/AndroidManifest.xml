@@ -58,6 +58,13 @@
          login (GeneralsOnlineActivity) and, eventually, the native
          multiplayer client both need plain outbound HTTPS/WebSocket. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- BOZI: туннель игровой сети. Служба переднего плана нужна, чтобы система
+         не усыпила связь, пока игрок в бою; тип systemExempted — тот, что
+         Android отводит приложениям с VpnService. Уведомление показывает адрес
+         в игровой сети и служит кнопкой возврата в лобби. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- GeneralsX @bugfix Android port 10/07/2026 the sign-in flow backgrounds
@@ -144,6 +151,16 @@
             android:icon="@mipmap/ic_launcher_setup"
             android:theme="@style/Theme.GeneralsZHSettings"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <service
+            android:name=".BoziVpnService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".FolderPickerActivity"
