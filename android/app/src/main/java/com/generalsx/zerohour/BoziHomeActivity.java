@@ -70,7 +70,7 @@ public class BoziHomeActivity extends Activity {
     }
 
     private void build() {
-        root = BoziUi.screen(this);
+        root = BoziUi.screenWithTabs(this, BoziTabs.LIBRARY, R.drawable.bozi_bg_library);
         BoziUi.title(this, root, "BOZI");
         BoziUi.label(this, root, "Вы вошли как " + BoziConfig.login(this), BoziUi.MUTED);
 

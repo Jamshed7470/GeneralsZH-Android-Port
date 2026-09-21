@@ -83,4 +83,25 @@ public final class BoziConfig {
     public static void forgetSession(Context context) {
         prefs(context).edit().remove(KEY_TOKEN).apply();
     }
+
+    // --- сеть ---
+
+    private static final String KEY_RELAY_ONLY = "relayOnly";
+
+    /**
+     * Ходить только через сервер, не пытаясь пробить прямой путь.
+     *
+     * <p>По умолчанию выключено: прямой путь в несколько раз быстрее. Но на
+     * некоторых мобильных сетях он встаёт и через минуту рвётся, и тогда
+     * ровные 200 мс через ретранслятор лучше, чем 40 мс с обрывами. Выбор
+     * оставлен игроку: со стороны приложения «рвётся» и «просто молчит»
+     * выглядят одинаково.
+     */
+    public static boolean relayOnly(Context context) {
+        return prefs(context).getBoolean(KEY_RELAY_ONLY, false);
+    }
+
+    public static void setRelayOnly(Context context, boolean value) {
+        prefs(context).edit().putBoolean(KEY_RELAY_ONLY, value).apply();
+    }
 }

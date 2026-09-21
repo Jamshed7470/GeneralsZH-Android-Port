@@ -45,8 +45,10 @@ public class BoziAuthActivity extends Activity {
     }
 
     private void build() {
-        LinearLayout root = BoziUi.screen(this);
-        BoziUi.title(this, root, "BOZI");
+        LinearLayout root = BoziUi.screen(this, R.drawable.bozi_bg_auth);
+        // Знак вместо надписи «BOZI»: экран входа — единственное место, где у
+        // приложения есть повод показать себя целиком.
+        BoziUi.logo(this, root, R.drawable.bozi_logo);
         BoziUi.label(this, root, "Игровая платформа. Вход по учётной записи — так у всех игроков одна версия игры.", BoziUi.MUTED);
 
         LinearLayout card = BoziUi.card(this, root);

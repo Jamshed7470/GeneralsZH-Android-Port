@@ -61,7 +61,21 @@ public final class BoziTunnel {
                     BoziConfig.fingerprint(context),
                     BoziConfig.token(context));
         }
+        session.setRelayOnly(BoziConfig.relayOnly(context));
         return session;
+    }
+
+    /**
+     * Переносит выбор «только через сервер» в уже поднятую сессию.
+     *
+     * <p>Вызывается с экрана соединения: менять путь на лету имеет смысл
+     * именно тогда, когда игрок видит, что прямой рвётся, — просить его
+     * выйти и зайти заново ради одной настройки было бы издевательством.
+     */
+    public synchronized void applyRelayOnly(Context context) {
+        if (session != null) {
+            session.setRelayOnly(BoziConfig.relayOnly(context));
+        }
     }
 
     /** Создаёт игру. Возвращает код, который зовущий передаёт друзьям. */

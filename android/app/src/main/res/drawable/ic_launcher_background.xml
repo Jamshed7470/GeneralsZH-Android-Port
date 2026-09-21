@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Dark navy-teal backdrop for the real Zero Hour eagle emblem
-     (mipmap-xxxhdpi/ic_launcher_foreground.png, upscaled from the actual
-     GeneralsMD/Code/Main/Generals.ico game icon). -->
+<!-- BOZI 21/09/2026 Подложка иконки под знак BOZI.
+
+     Знак золотой с серебром, и на прежнем сине-зелёном фоне от эмблемы Zero
+     Hour он выглядел чужим. Здесь тот же почти чёрный цвет, что и фон всех
+     экранов приложения (#0f1216), — иконка и первый экран читаются как одно
+     целое. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#0F2530" />
+    <solid android:color="#0F1216" />
 </shape>

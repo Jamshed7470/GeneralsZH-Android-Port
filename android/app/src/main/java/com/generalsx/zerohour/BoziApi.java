@@ -375,6 +375,26 @@ public final class BoziApi {
         public final List<Session> sessions = new ArrayList<>();
     }
 
+    /** Карточка игрока: сколько сыграно и есть ли доступ к админке. */
+    public static final class Profile {
+        public String login = "";
+        public boolean admin;
+        public int games;
+        public long playedSeconds;
+        public long createdAt;
+    }
+
+    public Profile profile() throws IOException {
+        JSONObject res = parseObject(request("GET", "/v1/profile", null, READ_TIMEOUT_MS));
+        Profile profile = new Profile();
+        profile.login = res.optString("login", "");
+        profile.admin = res.optBoolean("admin", false);
+        profile.games = res.optInt("games", 0);
+        profile.playedSeconds = res.optLong("playedSeconds", 0);
+        profile.createdAt = res.optLong("createdAt", 0);
+        return profile;
+    }
+
     public Lobby lobby() throws IOException {
         JSONObject res = requestObject("GET", "/v1/lobby", null);
         Lobby out = new Lobby();
@@ -398,19 +418,92 @@ public final class BoziApi {
             for (int i = 0; i < rooms.length(); i++) {
                 JSONObject o = rooms.optJSONObject(i);
                 if (o == null) continue;
-                Session s = new Session();
-                s.code = o.optString("code", "");
-                s.title = o.optString("title", "");
-                s.game = o.optString("game", "");
-                s.host = o.optString("host", "");
-                s.players = o.optInt("players", 0);
-                s.maxPlayers = o.optInt("maxPlayers", 8);
-                s.open = o.optBoolean("public", false);
-                s.state = o.optString("state", "lobby");
-                out.sessions.add(s);
+                out.sessions.add(session(o));
             }
         }
         return out;
+    }
+
+    /** Разбор одной сессии: один и тот же вид в лобби и в админке. */
+    private static Session session(JSONObject o) {
+        Session s = new Session();
+        s.code = o.optString("code", "");
+        s.title = o.optString("title", "");
+        s.game = o.optString("game", "");
+        s.host = o.optString("host", "");
+        s.players = o.optInt("players", 0);
+        s.maxPlayers = o.optInt("maxPlayers", 8);
+        s.open = o.optBoolean("public", false);
+        s.state = o.optString("state", "lobby");
+        return s;
+    }
+
+    // --- админка ---
+
+    /** Учётная запись глазами админки. */
+    public static final class Account {
+        public String login = "";
+        public boolean admin;
+        public boolean banned;
+        public boolean online;
+        public int games;
+        public long playedSeconds;
+    }
+
+    /** Состояние сервера целиком: то же, что показывает веб-админка. */
+    public static final class Overview {
+        public int users;
+        public int online;
+        public int rooms;
+        public int playing;
+        public long uptimeSeconds;
+        public final List<Session> roomList = new ArrayList<>();
+        public final List<Account> accounts = new ArrayList<>();
+        public final List<Game> catalog = new ArrayList<>();
+    }
+
+    public Overview adminOverview() throws IOException {
+        JSONObject res = requestObject("GET", "/v1/admin/overview", null);
+        Overview out = new Overview();
+        out.users = res.optInt("users", 0);
+        out.online = res.optInt("online", 0);
+        out.rooms = res.optInt("rooms", 0);
+        out.playing = res.optInt("playing", 0);
+        out.uptimeSeconds = res.optLong("uptimeSeconds", 0);
+
+        JSONArray rooms = res.optJSONArray("roomList");
+        if (rooms != null) {
+            for (int i = 0; i < rooms.length(); i++) {
+                JSONObject o = rooms.optJSONObject(i);
+                if (o != null) out.roomList.add(session(o));
+            }
+        }
+        JSONArray accounts = res.optJSONArray("accounts");
+        if (accounts != null) {
+            for (int i = 0; i < accounts.length(); i++) {
+                JSONObject o = accounts.optJSONObject(i);
+                if (o == null) continue;
+                Account a = new Account();
+                a.login = o.optString("login", "");
+                a.admin = o.optBoolean("admin", false);
+                a.banned = o.optBoolean("banned", false);
+                a.online = o.optBoolean("online", false);
+                a.games = o.optInt("games", 0);
+                a.playedSeconds = o.optLong("playedSeconds", 0);
+                out.accounts.add(a);
+            }
+        }
+        collect(out.catalog, res.optJSONArray("catalog"), false);
+        return out;
+    }
+
+    /** Действия над игроком: ban, unban, admin, unadmin, delete. */
+    public void adminUser(String login, String action) throws IOException {
+        requestObject("POST", "/v1/admin/user", json("login", login, "action", action));
+    }
+
+    public void adminCloseRoom(String code) throws IOException {
+        requestObject("POST", "/v1/admin/room", json("code", code, "action", "close"));
     }
 
     // --- чат ---

@@ -12,7 +12,6 @@ import android.util.TypedValue;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
@@ -31,15 +30,11 @@ public class BoziLobbyActivity extends Activity {
 
     private LinearLayout playersBox;
     private LinearLayout sessionsBox;
-    private LinearLayout chatBox;
-    private ScrollView chatScroll;
-    private EditText chatInput;
     private TextView statusLine;
 
     private static final int REQUEST_VPN = 7001;
 
     private volatile boolean running;
-    private volatile long chatSince;
     private String myCode = "";
     private TextView tunnelLine;
     private LinearLayout tunnelBox;
@@ -59,7 +54,6 @@ public class BoziLobbyActivity extends Activity {
         super.onStart();
         running = true;
         new Thread(this::pollLobby, "bozi-lobby").start();
-        new Thread(this::pollChat, "bozi-chat").start();
     }
 
     @Override
@@ -72,7 +66,7 @@ public class BoziLobbyActivity extends Activity {
     }
 
     private void build() {
-        LinearLayout root = BoziUi.screen(this);
+        LinearLayout root = BoziUi.screenWithTabs(this, BoziTabs.SESSIONS, R.drawable.bozi_bg_sessions);
         BoziUi.title(this, root, "Игроки и сессии");
         statusLine = BoziUi.label(this, root, "Соединяемся…", BoziUi.MUTED);
 
@@ -94,29 +88,6 @@ public class BoziLobbyActivity extends Activity {
         playersBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(playersBox, BoziUi.params(this, 0, 8));
 
-        BoziUi.sectionTitle(this, root, "Общий чат");
-        LinearLayout chatCard = BoziUi.card(this, root);
-        chatScroll = new ScrollView(this);
-        chatBox = new LinearLayout(this);
-        chatBox.setOrientation(LinearLayout.VERTICAL);
-        chatScroll.addView(chatBox);
-        LinearLayout.LayoutParams chatParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, BoziUi.dp(this, 220));
-        chatCard.addView(chatScroll, chatParams);
-
-        LinearLayout sendRow = BoziUi.row(this, chatCard);
-        chatInput = new EditText(this);
-        chatInput.setHint("Сообщение");
-        chatInput.setHintTextColor(BoziUi.MUTED);
-        chatInput.setTextColor(BoziUi.TEXT);
-        chatInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        sendRow.addView(chatInput, BoziUi.grow());
-        TextView send = new TextView(this);
-        send.setText("Отправить");
-        send.setTextColor(BoziUi.ACCENT);
-        send.setPadding(BoziUi.dp(this, 12), 0, 0, 0);
-        send.setOnClickListener(v -> sendChat());
-        sendRow.addView(send);
     }
 
     // --- опрос сервера ---
@@ -141,85 +112,6 @@ public class BoziLobbyActivity extends Activity {
                 return;
             }
         }
-    }
-
-    private void pollChat() {
-        while (running) {
-            try {
-                BoziApi api = new BoziApi(this);
-                BoziApi.ChatPage page = api.chat(myCode, chatSince);
-                chatSince = page.last;
-                if (!page.messages.isEmpty()) {
-                    ui.post(() -> showMessages(page));
-                }
-            } catch (Exception e) {
-                // Сеть моргнула — ждём и пробуем снова. Ошибку чата на экран
-                // не выносим: она перекрыла бы состояние лобби, которое важнее.
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException ignored) {
-                    return;
-                }
-            }
-        }
-    }
-
-    private void showLobby(BoziApi.Lobby lobby) {
-        statusLine.setText("В сети: " + lobby.online + " · в бою: " + lobby.playing);
-
-        sessionsBox.removeAllViews();
-        if (lobby.sessions.isEmpty()) {
-            BoziUi.label(this, sessionsBox, "Открытых сессий нет. Создайте свою — её увидят все.", BoziUi.MUTED);
-        } else {
-            for (BoziApi.Session session : lobby.sessions) {
-                LinearLayout card = BoziUi.card(this, sessionsBox);
-                TextView name = BoziUi.label(this, card, session.title, BoziUi.TEXT);
-                name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-                String state = "playing".equals(session.state) ? "идёт бой" : "идёт сбор";
-                BoziUi.label(this, card, "Хост: " + session.host + " · игроков "
-                        + session.players + " из " + session.maxPlayers + " · " + state, BoziUi.MUTED);
-                if (!"playing".equals(session.state) && session.players < session.maxPlayers) {
-                    BoziUi.button(this, card, "Присоединиться", false, v -> join(session.code));
-                }
-            }
-        }
-
-        playersBox.removeAllViews();
-        if (lobby.players.isEmpty()) {
-            BoziUi.label(this, playersBox, "Сейчас никого нет.", BoziUi.MUTED);
-        } else {
-            for (BoziApi.Player player : lobby.players) {
-                String suffix = player.inGame.isEmpty() ? "" : " · в игре " + player.inGame;
-                boolean me = player.login.equalsIgnoreCase(lobby.me);
-                BoziUi.label(this, playersBox, (me ? "• " : "") + player.login + suffix,
-                        me ? BoziUi.ACCENT : BoziUi.TEXT);
-            }
-        }
-    }
-
-    private void showMessages(BoziApi.ChatPage page) {
-        for (BoziApi.ChatMessage message : page.messages) {
-            TextView line = new TextView(this);
-            line.setTextColor(BoziUi.TEXT);
-            line.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            line.setText(message.from + ": " + message.text);
-            chatBox.addView(line);
-        }
-        chatScroll.post(() -> chatScroll.fullScroll(ScrollView.FOCUS_DOWN));
-    }
-
-    private void sendChat() {
-        String text = chatInput.getText().toString().trim();
-        if (text.isEmpty()) return;
-        chatInput.setText("");
-        new Thread(() -> {
-            try {
-                new BoziApi(this).say(myCode, text);
-            } catch (Exception e) {
-                String message = BoziAuthActivity.message(e);
-                ui.post(() -> statusLine.setText(message));
-            }
-        }, "bozi-say").start();
     }
 
     // --- сессии ---
@@ -256,9 +148,7 @@ public class BoziLobbyActivity extends Activity {
                 String code = BoziTunnel.get().hostGame(this, BoziConfig.login(this),
                         "zerohour", title, open);
                 myCode = code;
-                chatSince = 0;
                 ui.post(() -> {
-                    chatBox.removeAllViews();
                     statusLine.setText("Сессия создана. Код: " + code);
                     showCode(code, open);
                     startTunnel();
@@ -289,9 +179,7 @@ public class BoziLobbyActivity extends Activity {
             try {
                 BoziTunnel.get().joinGame(this, code, BoziConfig.login(this));
                 myCode = BoziTunnel.get().status().code;
-                chatSince = 0;
                 ui.post(() -> {
-                    chatBox.removeAllViews();
                     statusLine.setText("Вы в сессии " + myCode);
                     startTunnel();
                 });
@@ -336,13 +224,79 @@ public class BoziLobbyActivity extends Activity {
         BoziVpnService.stop(this);
         BoziTunnel.get().stop();
         myCode = "";
-        chatSince = 0;
-        chatBox.removeAllViews();
         tunnelLine.setText("Вы пока не в сессии.");
         statusLine.setText("Вы вышли из сессии");
     }
 
     /** Показывает, как идёт связь с каждым соперником. */
+    private void showLobby(BoziApi.Lobby lobby) {
+        statusLine.setText("В сети " + lobby.online + " · в бою " + lobby.playing);
+
+        sessionsBox.removeAllViews();
+        if (lobby.sessions.isEmpty()) {
+            BoziUi.label(this, sessionsBox, "Открытых сессий нет. Создайте свою — её увидят все.",
+                    BoziUi.MUTED);
+        } else {
+            for (BoziApi.Session session : lobby.sessions) {
+                LinearLayout card = BoziUi.card(this, sessionsBox);
+
+                LinearLayout head = BoziUi.row(this, card);
+                TextView name = new TextView(this);
+                name.setText(session.title.isEmpty() ? session.code : session.title);
+                name.setTextColor(BoziUi.TEXT);
+                name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+                head.addView(name, BoziUi.grow());
+                boolean playing = "playing".equals(session.state);
+                BoziUi.pill(this, head, playing ? "идёт бой" : "идёт сбор",
+                        playing ? BoziUi.ACCENT : BoziUi.OK);
+
+                // Занятые места показываем точками: «3 из 8» приходится
+                // читать, а заполненность ряда видно сразу.
+                BoziUi.label(this, card, "хост " + session.host + " · "
+                        + pips(session.players, session.maxPlayers)
+                        + "  " + session.players + " из " + session.maxPlayers, BoziUi.MUTED);
+
+                if (!playing && session.players < session.maxPlayers) {
+                    BoziUi.button(this, card, "Присоединиться", false, v -> join(session.code));
+                }
+            }
+        }
+
+        playersBox.removeAllViews();
+        if (lobby.players.isEmpty()) {
+            BoziUi.label(this, playersBox, "Сейчас никого нет.", BoziUi.MUTED);
+        } else {
+            for (BoziApi.Player player : lobby.players) {
+                boolean me = player.login.equalsIgnoreCase(lobby.me);
+                LinearLayout row = BoziUi.row(this, playersBox);
+                BoziUi.avatar(this, row, initials(player.login),
+                        me ? BoziUi.ACCENT : BoziUi.MUTED);
+                TextView label = new TextView(this);
+                label.setText(player.login);
+                label.setTextColor(me ? BoziUi.ACCENT : BoziUi.TEXT);
+                label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+                row.addView(label, BoziUi.grow());
+                if (!player.inGame.isEmpty()) {
+                    BoziUi.pill(this, row, "в игре " + player.inGame, BoziUi.ACCENT);
+                }
+            }
+        }
+    }
+
+    /** Ряд точек: занятые места закрашены, свободные пустые. */
+    private static String pips(int taken, int total) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < Math.max(0, total); i++) {
+            out.append(i < taken ? '●' : '○');
+        }
+        return out.toString();
+    }
+
+    private static String initials(String login) {
+        if (login == null || login.isEmpty()) return "?";
+        return login.substring(0, Math.min(2, login.length())).toUpperCase();
+    }
+
     private void showTunnel(BoziTunnel.Status status) {
         if (!status.hasRoom()) {
             tunnelLine.setText(status.error.isEmpty() ? "Вы пока не в сессии." : status.error);

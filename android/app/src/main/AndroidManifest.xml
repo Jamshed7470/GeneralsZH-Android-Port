@@ -122,12 +122,49 @@
         <activity
             android:name=".BoziHomeActivity"
             android:exported="false"
+            android:launchMode="singleTop"
             android:label="@string/app_name"
             android:theme="@style/Theme.GeneralsZHSettings"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
             android:name=".BoziLobbyActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.GeneralsZHSettings"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- BOZI 21/09/2026 Разделы редизайна. Каждый — отдельный Activity:
+             у приложения уже такая сборка экранов, и переводить её на
+             фрагменты ради нижней панели значило бы трогать всё разом.
+             singleTop, потому что панель переходов возвращает на уже
+             открытый раздел, а не кладёт поверх его копию. -->
+        <activity
+            android:name=".BoziChatActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.GeneralsZHSettings"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".BoziMoreActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.GeneralsZHSettings"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".BoziNetworkActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.GeneralsZHSettings"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".BoziAdminActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.GeneralsZHSettings"
