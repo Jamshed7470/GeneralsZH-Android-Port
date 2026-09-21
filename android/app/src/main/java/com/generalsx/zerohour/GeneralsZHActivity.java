@@ -211,16 +211,13 @@ public class GeneralsZHActivity extends SDLActivity {
                         if (key.equals("IPAddress") || key.equals("GameSpyIPAddress")) {
                             continue;
                         }
-                        out.append(line).append('
-');
+                        out.append(line).append('\n');
                     }
                 }
             }
             if (!vip.isEmpty()) {
-                out.append("GameSpyIPAddress = ").append(vip).append('
-');
-                out.append("IPAddress = ").append(vip).append('
-');
+                out.append("GameSpyIPAddress = ").append(vip).append('\n');
+                out.append("IPAddress = ").append(vip).append('\n');
             }
             File parent = options.getParentFile();
             if (parent == null || (!parent.isDirectory() && !parent.mkdirs())) {
