@@ -735,7 +735,20 @@ int main(int argc, char* argv[])
 				int zhLen = snprintf(zhUserDataDir, sizeof(zhUserDataDir),
 					"%s/Command and Conquer Generals Zero Hour Data", generalsRoot);
 				if (zhLen > 0 && (size_t)zhLen < sizeof(zhUserDataDir)) {
-					setenv("GENERALSX_USERDATA_DIR", zhUserDataDir, 1);
+					// BOZI @bugfix 21/09/2026 Не перетираем путь, заданный оболочкой.
+					//
+					// Общая папка требует разрешения «Доступ ко всем файлам»,
+					// которое выдаётся руками в настройках системы. Пока его нет,
+					// mkdir выше молча не срабатывает, движок не может завести свои
+					// файлы и падает в окно серьёзной ошибки на чёрном экране — по
+					// нему невозможно догадаться, что дело в разрешении.
+					//
+					// Оболочка приложения знает об этом раньше нас: она проверяет
+					// доступ и, если общей папки не получить, заранее выставляет сюда
+					// путь внутри своего каталога, где разрешение не нужно. Её решение
+					// перезаписывать нельзя — отсюда 0 вместо 1. Если переменная не
+					// задана (запуск не из BOZI), поведение прежнее.
+					setenv("GENERALSX_USERDATA_DIR", zhUserDataDir, 0);
 				}
 
 				// Reserved sibling for vanilla Generals, not used by this

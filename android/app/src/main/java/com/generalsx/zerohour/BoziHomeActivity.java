@@ -36,6 +36,8 @@ public class BoziHomeActivity extends Activity {
     private TextView statusLine;
     /** Игрок ушёл выдавать разрешение — вернётся, и запуск продолжится сам. */
     private boolean pendingLaunchAfterPermission;
+    /** Предложили один раз — больше не пристаём: без разрешения игра работает. */
+    private static final String KEY_FILES_ACCESS_OFFERED = "filesAccessOffered";
     private TextView playButton;
     private boolean installing;
     private boolean pendingLaunchAfterRotation;
@@ -274,22 +276,28 @@ public class BoziHomeActivity extends Activity {
      * хранилища Android разрешает только по отдельному разрешению «Доступ ко
      * всем файлам», которое выдаётся руками в настройках системы.
      *
-     * <p>Без него игра запускается, но не может создать свою папку и падает с
-     * окном «Technical Difficulties» на чёрном экране — по этому окну
-     * невозможно догадаться, что дело в разрешении. Раньше разрешение просили
-     * только на экране выбора папки с игрой; в BOZI игры ставит само
-     * приложение, и тот экран никто не открывает, поэтому новый игрок
-     * упирался в это окно на первом же запуске.
+     * <p>Разрешение не обязательно: без него игра кладёт данные в собственный
+     * каталог и запускается как ни в чём не бывало — выбор делает
+     * {@code GeneralsZHActivity.chooseUserDataDir}. Но общая папка удобнее,
+     * поэтому предлагаем выдать разрешение один раз. Отказ запоминаем и
+     * больше не спрашиваем: приставать к человеку из-за удобства, без
+     * которого всё работает, — плохой размен.
      *
-     * @return true, если можно запускать игру
+     * @return true, если игру можно запускать прямо сейчас
      */
-    private boolean ensureUserDataAccess() {
-        if (!haveUserDataAccess()) {
-            askForUserDataAccess();
-            return false;
+    private boolean offerUserDataAccess() {
+        if (haveUserDataAccess()) {
+            createUserDataDirs();
+            return true;
         }
-        createUserDataDirs();
-        return true;
+        if (getSharedPreferences(BoziConfig.PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_FILES_ACCESS_OFFERED, false)) {
+            return true;
+        }
+        getSharedPreferences(BoziConfig.PREFS, MODE_PRIVATE).edit()
+                .putBoolean(KEY_FILES_ACCESS_OFFERED, true).apply();
+        askForUserDataAccess();
+        return false;
     }
 
     private boolean haveUserDataAccess() {
@@ -307,12 +315,13 @@ public class BoziHomeActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("Нужен доступ к файлам")
-                .setMessage("Игра хранит сохранения, настройки и карты в общей папке "
-                        + "Generals в памяти телефона. Android разрешает это только по "
-                        + "отдельному разрешению.\n\n"
-                        + "Сейчас откроются настройки — включите «Доступ ко всем файлам» "
-                        + "для BOZI и вернитесь назад. Игра запустится сама.")
+                .setTitle("Где хранить сохранения и карты")
+                .setMessage("Их удобнее держать в общей папке Generals: её видно файловым "
+                        + "менеджером, туда можно положить свои карты, и она переживает "
+                        + "переустановку. Android разрешает это только по отдельному "
+                        + "разрешению.\n\n"
+                        + "Можно и без него — тогда данные лягут внутрь приложения, и всё "
+                        + "будет работать. Спрошу об этом только один раз.")
                 .setPositiveButton("Открыть настройки", (d, which) -> {
                     pendingLaunchAfterPermission = true;
                     try {
@@ -333,7 +342,9 @@ public class BoziHomeActivity extends Activity {
                         }
                     }
                 })
-                .setNegativeButton("Не сейчас", null)
+                // Отказ не мешает играть: данные лягут в каталог приложения.
+                // Поэтому кнопка не «Отмена», а обещание сразу запустить игру.
+                .setNegativeButton("Играть так", (d, which) -> launchGame())
                 .show();
     }
 
@@ -360,7 +371,7 @@ public class BoziHomeActivity extends Activity {
             statusLine.setText("Сначала установите игру");
             return;
         }
-        if (!ensureUserDataAccess()) {
+        if (!offerUserDataAccess()) {
             return;
         }
         reportSessionState("playing");

@@ -134,7 +134,7 @@ public class GeneralsZHActivity extends SDLActivity {
         }
 
         acquireMulticastLock();
-        pinLanIpToTunnel();
+        prepareUserData();
 
         super.onCreate(savedInstanceState);
     }
@@ -176,31 +176,93 @@ public class GeneralsZHActivity extends SDLActivity {
     // мёртвому адресу прошлого боя. Движок в этом случае проверяет, есть ли
     // такой адрес на устройстве, и молча возвращается к своему перебору —
     // но лишний мусор в настройках сбивает с толку при разборе жалоб.
-    private void pinLanIpToTunnel() {
+    /** Имя папки данных: движок ищет ровно его, как и на ПК. */
+    private static final String ZH_DATA_DIR_NAME = "Command and Conquer Generals Zero Hour Data";
+
+    /**
+     * Готовит папку с данными игры и сообщает её движку.
+     *
+     * <p>Движок по умолчанию кладёт сохранения, настройки и карты в общую
+     * папку {@code /storage/emulated/0/Generals} — так, как на ПК: её видно
+     * любым файловым менеджером, туда удобно положить свои карты, и она
+     * переживает переустановку приложения. Но писать в корень общего
+     * хранилища Android разрешает только по отдельному разрешению «Доступ ко
+     * всем файлам», которое выдаётся руками в настройках системы.
+     *
+     * <p>Раньше без этого разрешения игра просто падала в окно серьёзной
+     * ошибки на чёрном экране: движок не мог создать свою папку. Теперь, если
+     * общей папки не получить, данные уходят в собственный каталог
+     * приложения, где никакого разрешения не нужно, — игра запускается у
+     * любого, кто просто поставил APK. Разрешение остаётся полезным (общая
+     * папка удобнее), но перестало быть условием запуска.
+     *
+     * <p>Движок читает путь из переменной {@code GENERALSX_USERDATA_DIR} и с
+     * этой сборки не перезаписывает её, если она уже задана, — поэтому выбор
+     * делается здесь, пока нативная часть ещё не запущена.
+     */
+    private void prepareUserData() {
+        File dir = chooseUserDataDir();
+        try {
+            android.system.Os.setenv("GENERALSX_USERDATA_DIR", dir.getAbsolutePath(), true);
+            Log.i(TAG, "данные игры: " + dir.getAbsolutePath());
+        } catch (Exception e) {
+            // Переменную не выставить — движок возьмёт свой путь по умолчанию.
+            Log.w(TAG, "не задать путь данных игры", e);
+        }
+        pinLanIpToTunnel(dir);
+    }
+
+    /** Общая папка, если в неё можно писать; иначе — собственная. */
+    private File chooseUserDataDir() {
+        File root = Environment.getExternalStorageDirectory();
+        if (root != null) {
+            File shared = new File(root, "Generals");
+            File zh = new File(shared, ZH_DATA_DIR_NAME);
+            if (zh.isDirectory() || zh.mkdirs()) {
+                // Соседняя папка базовой игры — чтобы раскладка совпадала с ПК.
+                new File(shared, "Command and Conquer Generals Data").mkdirs();
+                if (canReallyWrite(zh)) {
+                    return zh;
+                }
+            }
+        }
+        File own = new File(getExternalFilesDir(null), "Generals/" + ZH_DATA_DIR_NAME);
+        //noinspection ResultOfMethodCallIgnored
+        own.mkdirs();
+        return own;
+    }
+
+    /**
+     * Проверяет запись делом, а не вопросом.
+     *
+     * <p>{@code File.canWrite()} на Android отвечает по правам файловой
+     * системы и не знает про разрешения приложения: на папке, куда система
+     * писать не даст, он всё равно говорит «да». Единственная честная
+     * проверка — попробовать создать файл.
+     */
+    private boolean canReallyWrite(File dir) {
+        File probe = new File(dir, ".bozi-write-test");
+        try {
+            try (OutputStream out = new FileOutputStream(probe)) {
+                out.write('1');
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            probe.delete();
+        }
+    }
+
+    private void pinLanIpToTunnel(File dataDir) {
         String vip = "";
         try {
             vip = BoziTunnel.get().status().vip;
         } catch (Exception e) {
             Log.w(TAG, "не спросить адрес туннеля", e);
         }
-        File root = Environment.getExternalStorageDirectory();
-        if (root == null) {
-            return;
-        }
-        // Папки заводим сами: на первом запуске их ещё нет, а движок создаёт
-        // их позже, чем читает настройки.
-        File generals = new File(root, "Generals");
-        new File(generals, "Command and Conquer Generals Data").mkdirs();
-        new File(generals, "Command and Conquer Generals Zero Hour Data").mkdirs();
-        File[] dataDirs = generals.listFiles();
-        if (dataDirs == null) {
-            return;
-        }
-        for (File dir : dataDirs) {
-            if (dir.isDirectory()) {
-                writeLanIp(new File(dir, "Options.ini"), vip);
-            }
-        }
+        writeLanIp(new File(dataDir, "Options.ini"), vip);
     }
 
     /** Переписывает в Options.ini два ключа адреса, не трогая остальные. */
