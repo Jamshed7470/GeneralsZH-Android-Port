@@ -37,6 +37,8 @@ public class BoziChatActivity extends Activity {
     private ScrollView messagesScroll;
     private EditText input;
     private TextView statusLine;
+    /** Подсказка в пустом чате: убирается с первым сообщением. */
+    private TextView emptyNote;
 
     private volatile boolean running;
     private volatile long since;
@@ -68,19 +70,23 @@ public class BoziChatActivity extends Activity {
     }
 
     private void build() {
-        LinearLayout root = BoziUi.screenWithTabs(this, BoziTabs.CHAT, R.drawable.bozi_bg_chat);
-        BoziUi.title(this, root, "Общий чат");
-        statusLine = BoziUi.label(this, root, "Соединяемся…", BoziUi.MUTED);
+        LinearLayout root = BoziUi.screenWithTabsFixed(this, BoziTabs.CHAT, R.drawable.bozi_bg_chat);
+        LinearLayout head = BoziUi.header(this, root, "соединяемся…", "Чат",
+                initials(me), v -> startActivity(new android.content.Intent(
+                        this, BoziMoreActivity.class)));
+        statusLine = (TextView) head.getChildAt(0);
 
-        LinearLayout card = BoziUi.card(this, root);
+        // Переписка лежит прямо на фоне раздела, без рамки: карточка вокруг
+        // ленты сообщений только сужала бы её и спорила с пузырями.
         messagesScroll = new ScrollView(this);
         messagesBox = new LinearLayout(this);
         messagesBox.setOrientation(LinearLayout.VERTICAL);
         messagesScroll.addView(messagesBox);
-        // Высота на глаз не годится: на маленьком экране чат съедал бы поле
-        // ввода. Отдаём ему всё, что осталось от заголовка и строки отправки.
-        card.addView(messagesScroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, BoziUi.dp(this, 420)));
+        emptyNote = BoziUi.label(this, messagesBox,
+                "Пока тихо. Напишите первым — сообщение увидят все, кто в сети.", BoziUi.MUTED);
+        // Лента забирает всю оставшуюся высоту, поле ввода остаётся внизу.
+        root.addView(messagesScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         LinearLayout sendRow = BoziUi.row(this, root);
         input = new EditText(this);
@@ -128,7 +134,7 @@ public class BoziChatActivity extends Activity {
             try {
                 BoziApi.Lobby lobby = new BoziApi(this).lobby();
                 ui.post(() -> statusLine.setText(
-                        "В сети " + lobby.online + " · в бою " + lobby.playing));
+                        "в сети " + lobby.online + " · в бою " + lobby.playing));
             } catch (Exception ignored) {
                 // Молча: чат работает и без этой строки.
             }
@@ -137,6 +143,10 @@ public class BoziChatActivity extends Activity {
     }
 
     private void showMessages(BoziApi.ChatPage page) {
+        if (emptyNote != null) {
+            messagesBox.removeView(emptyNote);
+            emptyNote = null;
+        }
         for (BoziApi.ChatMessage message : page.messages) {
             boolean mine = message.from.equalsIgnoreCase(me);
             messagesBox.addView(bubble(message, mine));
@@ -204,6 +214,11 @@ public class BoziChatActivity extends Activity {
                 ui.post(() -> statusLine.setText(message));
             }
         }, "bozi-say").start();
+    }
+
+    private static String initials(String login) {
+        if (login == null || login.isEmpty()) return "?";
+        return login.substring(0, Math.min(2, login.length())).toUpperCase();
     }
 
     private void sleep(long ms) {

@@ -33,12 +33,13 @@ public class BoziHomeActivity extends Activity {
 
     private LinearLayout root;
     private LinearLayout catalogBox;
+    /** Карточка текущей сборки: перерисовывается вместе с установкой. */
+    private LinearLayout heroBox;
     private TextView statusLine;
     /** Игрок ушёл выдавать разрешение — вернётся, и запуск продолжится сам. */
     private boolean pendingLaunchAfterPermission;
     /** Предложили один раз — больше не пристаём: без разрешения игра работает. */
     private static final String KEY_FILES_ACCESS_OFFERED = "filesAccessOffered";
-    private TextView playButton;
     private boolean installing;
     private boolean pendingLaunchAfterRotation;
     private List<BoziApi.Game> catalog = new ArrayList<>();
@@ -71,48 +72,76 @@ public class BoziHomeActivity extends Activity {
 
     private void build() {
         root = BoziUi.screenWithTabs(this, BoziTabs.LIBRARY, R.drawable.bozi_bg_library);
-        BoziUi.title(this, root, "BOZI");
-        BoziUi.label(this, root, "Вы вошли как " + BoziConfig.login(this), BoziUi.MUTED);
 
-        playButton = BoziUi.button(this, root, "Играть", true, v -> launchGame());
-        statusLine = BoziUi.label(this, root, "", BoziUi.MUTED);
+        BoziUi.header(this, root, "вы вошли как " + BoziConfig.login(this), "Библиотека",
+                initials(BoziConfig.login(this)),
+                v -> startActivity(new Intent(this, BoziMoreActivity.class)));
 
-        BoziUi.button(this, root, "Игроки и сессии", false,
-                v -> startActivity(new Intent(this, BoziLobbyActivity.class)));
+        // Место под карточку текущей сборки: она перерисовывается вместе с
+        // состоянием установки, поэтому живёт в своей коробке.
+        heroBox = new LinearLayout(this);
+        heroBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(heroBox, BoziUi.params(this, 0, 0));
 
-        BoziUi.sectionTitle(this, root, "Игры");
+        BoziUi.eyebrow(this, root, "игры").setLayoutParams(BoziUi.params(this, 22, 12));
         catalogBox = new LinearLayout(this);
         catalogBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(catalogBox, BoziUi.params(this, 0, 8));
 
-        BoziUi.sectionTitle(this, root, "Ещё");
-        BoziUi.button(this, root, "Настройки движка и графики", false,
-                v -> startActivity(new Intent(this, SetupActivity.class)));
-        // Прямой вход в журнал: когда игра падает у человека на другом конце
-        // города, единственный способ понять причину — попросить его прислать
-        // лог, а искать его внутри экрана настроек движка никто не станет.
-        BoziUi.button(this, root, "Журнал ошибок", false,
-                v -> startActivity(new Intent(this, LogViewerActivity.class)));
-        BoziUi.button(this, root, "Выйти из учётной записи", false,
-                v -> BoziAuthActivity.signOut(this));
+        statusLine = BoziUi.label(this, root,
+                "Файлы раздаёт только сервер BOZI — поэтому у всех в сессии одна версия сборки.",
+                BoziUi.MUTED);
+        statusLine.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
 
         refreshPlayButton();
     }
 
+    /**
+     * Карточка текущей сборки.
+     *
+     * <p>Она же отвечает на вопрос «во что я сейчас играю»: на экране может
+     * стоять несколько сборок, а запускается одна — та, что выбрана
+     * последней.
+     */
     private void refreshPlayButton() {
+        heroBox.removeAllViews();
         boolean ready = BoziInstall.readyToPlay(this);
-        playButton.setVisibility(ready ? TextView.VISIBLE : TextView.GONE);
+
         if (ready) {
             String path = BoziInstall.currentGamePath(this);
-            statusLine.setText("Игра готова: " + new File(path == null ? "" : path).getName());
+            String name = new File(path == null ? "" : path).getName();
+            BoziUi.heroCard(this, heroBox, "текущая сборка", title(name),
+                    "Игра готова · " + name, BoziUi.OK,
+                    "Играть", v -> launchGame(),
+                    "Сессия", v -> startActivity(new Intent(this, BoziLobbyActivity.class)));
         } else if (BoziInstall.currentBasePath(this) != null) {
             // Частый случай на чистом телефоне: базовую игру поставили (она
             // первая в списке и нужна остальным), а саму сборку — ещё нет.
-            statusLine.setText("Базовая Generals установлена. Осталось выбрать сборку "
-                    + "на её основе — например, Zero Hour + Contra 007.");
+            BoziUi.heroCard(this, heroBox, "почти готово", "Выберите сборку",
+                    "Базовая Generals уже установлена", BoziUi.MUTED,
+                    "К списку сборок", v -> catalogBox.requestFocus(), null, null);
         } else {
-            statusLine.setText("Игра ещё не установлена — выберите её в списке ниже.");
+            BoziUi.heroCard(this, heroBox, "начнём", "Установите игру",
+                    "Сборки ниже · ставятся из приложения", BoziUi.MUTED,
+                    "К списку сборок", v -> catalogBox.requestFocus(), null, null);
         }
+    }
+
+    /** Человеческое имя сборки из имени папки: «zerohour-contra» — не имя. */
+    private static String title(String folder) {
+        if (folder == null || folder.isEmpty()) return "Игра";
+        switch (folder) {
+            case "zerohour-contra": return "Zero Hour + Contra";
+            case "generals": return "Generals";
+            case "iran": return "Generals IRAN";
+            case "boss": return "Boss Generals";
+            default: return folder;
+        }
+    }
+
+    private static String initials(String login) {
+        if (login == null || login.isEmpty()) return "?";
+        return login.substring(0, Math.min(2, login.length())).toUpperCase();
     }
 
     private void loadCatalog() {
@@ -150,35 +179,31 @@ public class BoziHomeActivity extends Activity {
             return;
         }
         for (BoziApi.Game game : catalog) {
-            LinearLayout card = BoziUi.card(this, catalogBox);
-            TextView name = BoziUi.label(this, card, game.title, BoziUi.TEXT);
-            name.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18);
-            if (!game.subtitle.isEmpty()) {
-                BoziUi.label(this, card, game.subtitle, BoziUi.MUTED);
-            }
-
             boolean installed = BoziInstall.installed(this, game.addon ? game.base : game.id);
             String size = game.sizeText();
+            String subtitle = game.subtitle.isEmpty() ? size : game.subtitle;
+
             if (!game.ready) {
-                BoziUi.label(this, card, "Файл ещё не выложен на сервер", BoziUi.BAD);
-                continue;
-            }
-            if (installed && !game.addon && !BoziInstall.playable(this, game.id)) {
+                BoziUi.gameCard(this, catalogBox, game.title, subtitle,
+                        "Файл ещё не выложен на сервер", BoziUi.BAD, "Скоро", false, null);
+            } else if (installed && !game.addon && !BoziInstall.playable(this, game.id)) {
                 // Базовая Generals: в сборке только движок Zero Hour, запускать
                 // её нечем. Раньше здесь была кнопка «Играть», и первый запуск
                 // на чистом телефоне кончался окном «Technical Difficulties».
-                BoziUi.label(this, card, "Установлена · " + size, BoziUi.OK);
-                BoziUi.label(this, card,
-                        "Нужна как основа: сама по себе не запускается, "
-                                + "на ней работают сборки ниже.", BoziUi.MUTED);
+                BoziUi.gameCard(this, catalogBox, game.title, subtitle,
+                        "Установлена · нужна как основа", BoziUi.MUTED, null, false, null);
             } else if (installed && !game.addon) {
-                BoziUi.label(this, card, "Установлена · " + size, BoziUi.OK);
-                BoziUi.button(this, card, "Играть", true, v -> {
-                    selectAndLaunch(game);
-                });
+                BoziUi.gameCard(this, catalogBox, game.title, subtitle,
+                        "Установлена · " + size, BoziUi.OK,
+                        "Играть", true, v -> selectAndLaunch(game));
             } else {
-                TextView action = BoziUi.button(this, card,
-                        (game.addon ? "Добавить · " : "Скачать · ") + size, !installed, null);
+                LinearLayout card = BoziUi.gameCard(this, catalogBox, game.title, subtitle,
+                        installed ? "Установлена · " + size : "Не установлена",
+                        installed ? BoziUi.OK : BoziUi.MUTED,
+                        game.addon ? "Добавить" : "Скачать", !installed, null);
+                // Кнопка нужна по имени: во время установки она показывает
+                // проценты, поэтому ссылку на неё держим, а не ищем заново.
+                TextView action = (TextView) card.getChildAt(card.getChildCount() - 1);
                 action.setOnClickListener(v -> startInstall(game, action));
             }
         }

@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -40,37 +41,22 @@ public class BoziMoreActivity extends Activity {
 
     private void build() {
         LinearLayout root = BoziUi.screenWithTabs(this, BoziTabs.MORE, R.drawable.bozi_bg_more);
-        BoziUi.title(this, root, "Профиль");
+        BoziUi.header(this, root, "учётная запись", BoziConfig.login(this),
+                initials(BoziConfig.login(this)), null);
 
         LinearLayout account = BoziUi.card(this, root);
-        LinearLayout head = BoziUi.row(this, account);
-        BoziUi.avatar(this, head, initials(BoziConfig.login(this)), BoziUi.ACCENT);
-        LinearLayout names = new LinearLayout(this);
-        names.setOrientation(LinearLayout.VERTICAL);
-        TextView login = new TextView(this);
-        login.setText(BoziConfig.login(this));
-        login.setTextColor(BoziUi.TEXT);
-        login.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        names.addView(login);
-        TextView sub = new TextView(this);
-        sub.setText("Учётная запись BOZI");
-        sub.setTextColor(BoziUi.MUTED);
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        names.addView(sub);
-        head.addView(names, BoziUi.grow());
-
         statsRow = BoziUi.row(this, account);
         BoziUi.tile(this, statsRow, "—", "партий");
         BoziUi.tile(this, statsRow, "—", "в игре");
         BoziUi.tile(this, statsRow, daysLeft() + "", "дней токена");
 
-        BoziUi.sectionTitle(this, root, "Язык приложения");
+        BoziUi.eyebrow(this, root, "язык приложения").setLayoutParams(BoziUi.params(this, 20, 10));
         LinearLayout languages = new LinearLayout(this);
         languages.setOrientation(LinearLayout.VERTICAL);
         root.addView(languages, BoziUi.params(this, 0, 8));
         showLanguages(languages);
 
-        BoziUi.sectionTitle(this, root, "Ещё");
+        BoziUi.eyebrow(this, root, "ещё").setLayoutParams(BoziUi.params(this, 20, 10));
         BoziUi.listRow(this, root, "Настройки движка и графики", "разрешение, кадры, DXVK",
                 BoziUi.TEXT, v -> startActivity(new Intent(this, SetupActivity.class)));
         BoziUi.listRow(this, root, "Соединение", "туннель, путь до соперников, проверки",
@@ -90,19 +76,41 @@ public class BoziMoreActivity extends Activity {
         serverLine.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
     }
 
-    /** Список языков: тот же набор, что у экрана настроек движка. */
+    /**
+     * Языки плиткой по два в ряд.
+     *
+     * <p>Их четырнадцать, и списком в полную ширину они занимали пол-экрана
+     * прокрутки — ради настройки, которую меняют один раз в жизни.
+     */
     private void showLanguages(LinearLayout parent) {
         String current = LocaleHelper.getSavedLanguageTag(this);
+        LinearLayout row = null;
+        int inRow = 0;
         for (String tag : LocaleHelper.SUPPORTED_TAGS) {
-            String label = LocaleHelper.displayNameFor(this, tag);
+            if (inRow == 0) {
+                row = BoziUi.row(this, parent);
+            }
             boolean active = tag.equals(current);
-            BoziUi.listRow(this, parent, label, active ? "выбран" : "",
-                    active ? BoziUi.ACCENT : BoziUi.TEXT, v -> {
-                        LocaleHelper.setSavedLanguageTag(this, tag);
-                        // Перезапускаем экран: подписи уже нарисованы, и менять
-                        // их по одной — это тот же перезапуск, только руками.
-                        recreate();
-                    });
+            TextView chip = BoziUi.languageChip(this, LocaleHelper.displayNameFor(this, tag), active);
+            chip.setOnClickListener(v -> {
+                LocaleHelper.setSavedLanguageTag(this, tag);
+                // Перезапускаем экран: подписи уже нарисованы, и менять их по
+                // одной — тот же перезапуск, только руками.
+                recreate();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.rightMargin = inRow == 0 ? BoziUi.dp(this, 8) : 0;
+            row.addView(chip, lp);
+            inRow = (inRow + 1) % 2;
+        }
+        if (inRow == 1) {
+            // Нечётный последний ряд: добиваем пустотой, иначе чип растянется
+            // во всю ширину и будет выглядеть выбранным.
+            View filler = new View(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            row.addView(filler, lp);
         }
     }
 

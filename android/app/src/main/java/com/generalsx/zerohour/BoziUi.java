@@ -2,6 +2,7 @@ package com.generalsx.zerohour;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.InputType;
@@ -32,6 +33,8 @@ final class BoziUi {
     static final int ACCENT = Color.parseColor("#ffb020");
     static final int OK = Color.parseColor("#35c46a");
     static final int BAD = Color.parseColor("#ef5350");
+    /** Фон нижней панели: глубже, чем фон экрана, — панель должна отделяться. */
+    static final int DEEP = Color.parseColor("#0c1014");
 
     private BoziUi() {}
 
@@ -56,8 +59,8 @@ final class BoziUi {
         scroll.setFillViewport(true);
         LinearLayout column = new LinearLayout(a);
         column.setOrientation(LinearLayout.VERTICAL);
-        final int pad = dp(a, 20);
-        final int top = dp(a, 28);
+        final int pad = dp(a, 22);
+        final int top = dp(a, 10);
         column.setPadding(pad, top, pad, pad);
 
         // Нижнюю кнопку списка перекрывала системная панель навигации: нажатие
@@ -79,6 +82,281 @@ final class BoziUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         a.setContentView(scroll);
         return column;
+    }
+
+    // --- блоки из прототипа ---
+
+    /**
+     * Надстрочник: короткая строка капсом с разрядкой над заголовком.
+     *
+     * <p>Моноширинный шрифт здесь не для красоты: он отделяет служебные
+     * подписи от содержимого, и в прототипе на нём держится вся типографика
+     * мелких строк.
+     */
+    static TextView eyebrow(Activity a, LinearLayout parent, String text) {
+        TextView view = new TextView(a);
+        view.setText(text);
+        view.setTextColor(MUTED);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        view.setAllCaps(true);
+        view.setLetterSpacing(0.2f);
+        view.setTypeface(Typeface.MONOSPACE);
+        parent.addView(view, params(a, 0, 0));
+        return view;
+    }
+
+    /** Крупный заголовок раздела: 30sp с плотной разрядкой, как в прототипе. */
+    static TextView screenTitle(Activity a, LinearLayout parent, String text) {
+        TextView view = new TextView(a);
+        view.setText(text);
+        view.setTextColor(TEXT);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
+        view.setLetterSpacing(-0.03f);
+        view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout.LayoutParams lp = params(a, 8, 0);
+        parent.addView(view, lp);
+        return view;
+    }
+
+    /**
+     * Шапка раздела: надстрочник с заголовком слева, кружок профиля справа.
+     *
+     * @return столбец слева — в него можно дописать ещё строк
+     */
+    static LinearLayout header(Activity a, LinearLayout parent, String above, String title,
+                               String initials, View.OnClickListener onProfile) {
+        LinearLayout row = new LinearLayout(a);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowLp = params(a, 6, 18);
+        parent.addView(row, rowLp);
+
+        LinearLayout texts = new LinearLayout(a);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        row.addView(texts, grow());
+        if (above != null && !above.isEmpty()) {
+            eyebrow(a, texts, above);
+        }
+        screenTitle(a, texts, title);
+
+        if (initials != null && !initials.isEmpty()) {
+            TextView badge = new TextView(a);
+            badge.setText(initials);
+            badge.setTextColor(ACCENT);
+            badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            badge.setTypeface(Typeface.MONOSPACE);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setShape(GradientDrawable.OVAL);
+            bg.setColor(Color.parseColor("#171d24"));
+            bg.setStroke(dp(a, 1), withAlpha(Color.WHITE, 20));
+            badge.setBackground(bg);
+            badge.setOnClickListener(onProfile);
+            int size = dp(a, 40);
+            row.addView(badge, new LinearLayout.LayoutParams(size, size));
+        }
+        return texts;
+    }
+
+    /**
+     * Карточка текущей сборки: полоса-обложка сверху, кнопки снизу.
+     *
+     * <p>Главное на экране игр — одна кнопка «играть», и она должна быть
+     * видна без прокрутки. Обложка пока рисуется полосами: настоящих картинок
+     * сборок сервер ещё не отдаёт, а пустое серое место выглядело бы
+     * поломкой.
+     *
+     * @return карточка; кнопки уже внутри
+     */
+    static LinearLayout heroCard(Activity a, LinearLayout parent, String above, String title,
+                                 String note, int noteColor,
+                                 String primary, View.OnClickListener onPrimary,
+                                 String secondary, View.OnClickListener onSecondary) {
+        LinearLayout card = new LinearLayout(a);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#141a20"));
+        bg.setCornerRadius(dp(a, 24));
+        bg.setStroke(dp(a, 1), withAlpha(Color.WHITE, 20));
+        card.setBackground(bg);
+        card.setClipToOutline(true);
+        parent.addView(card, params(a, 0, 8));
+
+        LinearLayout cover = new LinearLayout(a);
+        cover.setOrientation(LinearLayout.VERTICAL);
+        cover.setGravity(Gravity.BOTTOM);
+        GradientDrawable coverBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] { Color.parseColor("#1a2028"), Color.parseColor("#171d24"),
+                        Color.parseColor("#12171d") });
+        cover.setBackground(coverBg);
+        cover.setPadding(dp(a, 20), dp(a, 16), dp(a, 20), dp(a, 18));
+        card.addView(cover, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(a, 150)));
+
+        TextView top = new TextView(a);
+        top.setText(above);
+        top.setTextColor(MUTED);
+        top.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        top.setAllCaps(true);
+        top.setLetterSpacing(0.16f);
+        top.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams topLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        cover.addView(top, topLp);
+
+        TextView name = new TextView(a);
+        name.setText(title);
+        name.setTextColor(TEXT);
+        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        name.setLetterSpacing(-0.03f);
+        name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        cover.addView(name);
+
+        TextView sub = new TextView(a);
+        sub.setText(note);
+        sub.setTextColor(noteColor);
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        sub.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(a, 7);
+        cover.addView(sub, subLp);
+
+        LinearLayout actions = new LinearLayout(a);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(dp(a, 16), dp(a, 16), dp(a, 16), dp(a, 16));
+        card.addView(actions, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView play = chipButton(a, primary, true);
+        play.setOnClickListener(onPrimary);
+        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        actions.addView(play, playLp);
+
+        if (secondary != null && !secondary.isEmpty()) {
+            TextView side = chipButton(a, secondary, false);
+            side.setOnClickListener(onSecondary);
+            LinearLayout.LayoutParams sideLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            sideLp.leftMargin = dp(a, 10);
+            actions.addView(side, sideLp);
+        }
+        return card;
+    }
+
+    /** Кнопка-плашка: капс, разрядка, скруглённый угол 14. */
+    static TextView chipButton(Activity a, String text, boolean primary) {
+        TextView view = new TextView(a);
+        view.setText(text);
+        view.setAllCaps(true);
+        view.setGravity(Gravity.CENTER);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        view.setLetterSpacing(0.16f);
+        view.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        view.setTextColor(primary ? Color.parseColor("#1a1206") : TEXT);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(primary ? ACCENT : Color.TRANSPARENT);
+        bg.setCornerRadius(dp(a, 14));
+        bg.setStroke(dp(a, 1), primary ? ACCENT : withAlpha(Color.WHITE, 36));
+        view.setBackground(bg);
+        int padV = dp(a, 16);
+        int padH = dp(a, 18);
+        view.setPadding(padH, padV, padH, padV);
+        view.setClickable(true);
+        return view;
+    }
+
+    /**
+     * Карточка игры в каталоге: обложка, три строки текста, действие справа.
+     *
+     * @return карточка, чтобы дописать в неё что-то ещё
+     */
+    static LinearLayout gameCard(Activity a, LinearLayout parent, String title, String subtitle,
+                                 String state, int stateColor,
+                                 String action, boolean primary, View.OnClickListener onAction) {
+        LinearLayout card = new LinearLayout(a);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] { Color.parseColor("#212a34"), Color.parseColor("#11161c") });
+        bg.setCornerRadius(dp(a, 18));
+        bg.setStroke(dp(a, 1), withAlpha(Color.WHITE, 23));
+        card.setBackground(bg);
+        int pad = dp(a, 14);
+        card.setPadding(pad, pad, pad, pad);
+        parent.addView(card, params(a, 0, 11));
+
+        View thumb = new View(a);
+        GradientDrawable thumbBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] { Color.parseColor("#1b222a"), Color.parseColor("#181e25") });
+        thumbBg.setCornerRadius(dp(a, 14));
+        thumbBg.setStroke(dp(a, 1), withAlpha(Color.WHITE, 13));
+        thumb.setBackground(thumbBg);
+        LinearLayout.LayoutParams thumbLp = new LinearLayout.LayoutParams(dp(a, 58), dp(a, 58));
+        thumbLp.rightMargin = dp(a, 14);
+        card.addView(thumb, thumbLp);
+
+        LinearLayout texts = new LinearLayout(a);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        card.addView(texts, grow());
+
+        TextView name = new TextView(a);
+        name.setText(title);
+        name.setTextColor(TEXT);
+        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        texts.addView(name);
+
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = new TextView(a);
+            sub.setText(subtitle);
+            sub.setTextColor(MUTED);
+            sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+            sub.setTypeface(Typeface.MONOSPACE);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = dp(a, 5);
+            texts.addView(sub, lp);
+        }
+
+        TextView stateView = new TextView(a);
+        stateView.setText(state);
+        stateView.setTextColor(stateColor);
+        stateView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        stateView.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams stateLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        stateLp.topMargin = dp(a, 5);
+        texts.addView(stateView, stateLp);
+
+        if (action != null && !action.isEmpty()) {
+            TextView button = new TextView(a);
+            button.setText(action);
+            button.setAllCaps(true);
+            button.setGravity(Gravity.CENTER);
+            button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            button.setLetterSpacing(0.12f);
+            button.setTypeface(Typeface.MONOSPACE);
+            button.setTextColor(primary ? Color.parseColor("#1a1206")
+                    : (onAction == null ? MUTED : TEXT));
+            GradientDrawable buttonBg = new GradientDrawable();
+            buttonBg.setColor(primary ? ACCENT
+                    : (onAction == null ? Color.TRANSPARENT : Color.parseColor("#1b222a")));
+            buttonBg.setCornerRadius(dp(a, 11));
+            buttonBg.setStroke(dp(a, 1), primary ? ACCENT : withAlpha(Color.WHITE, 20));
+            button.setBackground(buttonBg);
+            button.setPadding(dp(a, 13), dp(a, 11), dp(a, 13), dp(a, 11));
+            if (onAction != null) {
+                button.setClickable(true);
+                button.setOnClickListener(onAction);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.leftMargin = dp(a, 12);
+            card.addView(button, lp);
+        }
+        return card;
     }
 
     /** Знак платформы во всю ширину столбца. */
@@ -246,6 +524,32 @@ final class BoziUi {
     }
 
     /**
+     * Экран с панелью, но без прокрутки всего подряд.
+     *
+     * <p>Нужен там, где часть содержимого обязана оставаться на месте, —
+     * например в чате: лента прокручивается сама, а поле ввода стоит внизу.
+     * Внутри обычного прокручиваемого столбца вес не работает, и поле
+     * уезжало бы в середину экрана.
+     */
+    static LinearLayout screenWithTabsFixed(Activity a, String activeTab, int background) {
+        LinearLayout root = new LinearLayout(a);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BG);
+
+        LinearLayout column = new LinearLayout(a);
+        column.setOrientation(LinearLayout.VERTICAL);
+        final int pad = dp(a, 22);
+        column.setPadding(pad, dp(a, 10), pad, dp(a, 10));
+        applyTopInset(column, pad, dp(a, 10));
+        root.addView(column, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        BoziTabs.attach(a, root, activeTab);
+        a.setContentView(background == 0 ? root : withBackdrop(a, root, background));
+        return column;
+    }
+
+    /**
      * Прокручиваемый столбец во всю оставшуюся высоту родителя.
      *
      * <p>Нижний отступ берём у системы: с жестами панель навигации одна
@@ -272,6 +576,7 @@ final class BoziUi {
                 return insets;
             });
         }
+        applyTopInset(column, pad, top);
         scroll.addView(column, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         parent.addView(scroll, new LinearLayout.LayoutParams(
@@ -474,6 +779,45 @@ final class BoziUi {
         markLp.leftMargin = dp(a, 8);
         box.addView(mark, markLp);
         return box;
+    }
+
+    /** Плитка выбора: язык, режим — то, что выбирают одним касанием. */
+    static TextView languageChip(Activity a, String text, boolean active) {
+        TextView view = new TextView(a);
+        view.setText(text);
+        view.setTextColor(active ? ACCENT : Color.parseColor("#c3cbd5"));
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setGravity(Gravity.CENTER);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(active ? withAlpha(ACCENT, 26) : Color.parseColor("#141a20"));
+        bg.setCornerRadius(dp(a, 12));
+        bg.setStroke(dp(a, 1), active ? withAlpha(ACCENT, 102) : withAlpha(Color.WHITE, 18));
+        view.setBackground(bg);
+        int padV = dp(a, 12);
+        view.setPadding(dp(a, 10), padV, dp(a, 10), padV);
+        view.setClickable(true);
+        return view;
+    }
+
+    /**
+     * Сдвигает содержимое ниже системной строки.
+     *
+     * <p>Приложение рисует под ней намеренно — так фоновый снимок доходит до
+     * верхнего края экрана. Но текст под часами читать невозможно, поэтому
+     * первый элемент отодвигается ровно на высоту строки, которую сообщает
+     * система: зашитое число ошибётся на телефоне с вырезом.
+     */
+    private static void applyTopInset(LinearLayout column, int side, int base) {
+        column.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                top = insets.getInsets(WindowInsets.Type.statusBars()).top;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+            }
+            view.setPadding(side, base + top, side, view.getPaddingBottom());
+            return insets;
+        });
     }
 
     /** Цвет с другой прозрачностью: 0–255. */

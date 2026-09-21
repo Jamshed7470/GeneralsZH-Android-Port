@@ -36,7 +36,6 @@ public class BoziLobbyActivity extends Activity {
 
     private volatile boolean running;
     private String myCode = "";
-    private TextView tunnelLine;
     private LinearLayout tunnelBox;
 
     @Override
@@ -67,27 +66,38 @@ public class BoziLobbyActivity extends Activity {
 
     private void build() {
         LinearLayout root = BoziUi.screenWithTabs(this, BoziTabs.SESSIONS, R.drawable.bozi_bg_sessions);
-        BoziUi.title(this, root, "Игроки и сессии");
-        statusLine = BoziUi.label(this, root, "Соединяемся…", BoziUi.MUTED);
+        LinearLayout head = BoziUi.header(this, root, "соединяемся…", "Сессии",
+                initials(BoziConfig.login(this)),
+                v -> startActivity(new Intent(this, BoziMoreActivity.class)));
+        // Надстрочник в шапке — он же строка состояния: «в сети 3 · в бою 1».
+        statusLine = (TextView) head.getChildAt(0);
 
-        BoziUi.button(this, root, "Создать сессию", true, v -> askCreate());
-        BoziUi.button(this, root, "Войти по коду", false, v -> askJoin());
+        LinearLayout actions = BoziUi.row(this, root);
+        TextView create = BoziUi.chipButton(this, "Создать", true);
+        create.setOnClickListener(v -> askCreate());
+        actions.addView(create, BoziUi.grow());
+        TextView join = BoziUi.chipButton(this, "Войти по коду", false);
+        join.setOnClickListener(v -> askJoin());
+        LinearLayout.LayoutParams joinLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        joinLp.leftMargin = BoziUi.dp(this, 10);
+        actions.addView(join, joinLp);
 
-        BoziUi.sectionTitle(this, root, "Ваша сессия");
-        tunnelBox = BoziUi.card(this, root);
-        tunnelLine = BoziUi.label(this, tunnelBox, "Вы пока не в сессии.", BoziUi.MUTED);
-        BoziUi.button(this, tunnelBox, "Выйти из сессии", false, v -> leaveSession());
+        // Карточка своей сессии показывается, только когда сессия есть:
+        // пустая рамка с кнопкой «выйти» сбивала с толку.
+        tunnelBox = new LinearLayout(this);
+        tunnelBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(tunnelBox, BoziUi.params(this, 14, 0));
 
-        BoziUi.sectionTitle(this, root, "Открытые сессии");
+        BoziUi.eyebrow(this, root, "открытые сессии").setLayoutParams(BoziUi.params(this, 20, 10));
         sessionsBox = new LinearLayout(this);
         sessionsBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(sessionsBox, BoziUi.params(this, 0, 8));
 
-        BoziUi.sectionTitle(this, root, "Игроки в сети");
+        BoziUi.eyebrow(this, root, "игроки в сети").setLayoutParams(BoziUi.params(this, 20, 10));
         playersBox = new LinearLayout(this);
         playersBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(playersBox, BoziUi.params(this, 0, 8));
-
     }
 
     // --- опрос сервера ---
@@ -224,7 +234,7 @@ public class BoziLobbyActivity extends Activity {
         BoziVpnService.stop(this);
         BoziTunnel.get().stop();
         myCode = "";
-        tunnelLine.setText("Вы пока не в сессии.");
+        tunnelBox.removeAllViews();
         statusLine.setText("Вы вышли из сессии");
     }
 
@@ -297,23 +307,79 @@ public class BoziLobbyActivity extends Activity {
         return login.substring(0, Math.min(2, login.length())).toUpperCase();
     }
 
+    /**
+     * Карточка своей сессии: код крупно, рядом соперники и путь до каждого.
+     *
+     * <p>Код — главное, что отсюда уносят: его диктуют или пересылают. Поэтому
+     * он набран крупно и моноширинно (так не путают ноль с буквой), и рядом
+     * стоит кнопка копирования.
+     */
     private void showTunnel(BoziTunnel.Status status) {
+        tunnelBox.removeAllViews();
         if (!status.hasRoom()) {
-            tunnelLine.setText(status.error.isEmpty() ? "Вы пока не в сессии." : status.error);
+            if (!status.error.isEmpty()) {
+                BoziUi.label(this, tunnelBox, status.error, BoziUi.BAD);
+            }
             return;
         }
-        StringBuilder text = new StringBuilder();
-        text.append("Код ").append(status.code);
-        if (!status.vip.isEmpty()) text.append(" · ваш адрес ").append(status.vip);
-        text.append(status.host ? " · вы хозяин" : " · вы гость");
-        text.append(BoziTunnel.get().tunnelStarted() ? "\nТуннель включён" : "\nТуннель ещё не включён");
+
+        LinearLayout card = BoziUi.card(this, tunnelBox);
+        BoziUi.eyebrow(this, card, status.host ? "ваша сессия · вы хозяин" : "ваша сессия · вы гость");
+
+        LinearLayout codeRow = BoziUi.row(this, card);
+        TextView code = new TextView(this);
+        code.setText(status.code);
+        code.setTextColor(BoziUi.ACCENT);
+        code.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
+        code.setLetterSpacing(0.08f);
+        code.setTypeface(android.graphics.Typeface.MONOSPACE);
+        codeRow.addView(code, BoziUi.grow());
+
+        TextView copy = BoziUi.chipButton(this, "Копировать", false);
+        copy.setOnClickListener(v -> {
+            android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("BOZI", status.code));
+            statusLine.setText("код скопирован");
+        });
+        codeRow.addView(copy);
+
+        String address = status.vip.isEmpty() ? "адрес выдаётся…" : "ваш адрес " + status.vip;
+        BoziUi.label(this, card, address + " · "
+                + (BoziTunnel.get().tunnelStarted() ? "туннель включён" : "туннель ещё не включён"),
+                BoziUi.MUTED);
+
         for (BoziTunnel.Peer peer : status.peers) {
-            text.append("\n").append(peer.nick).append(" — ");
-            text.append(peer.online ? peer.path : "не в сети");
+            LinearLayout row = BoziUi.row(this, card);
+            BoziUi.avatar(this, row, initials(peer.nick), peer.online ? BoziUi.OK : BoziUi.MUTED);
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            TextView nick = new TextView(this);
+            nick.setText(peer.nick + (peer.host ? " · хозяин" : ""));
+            nick.setTextColor(BoziUi.TEXT);
+            nick.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            texts.addView(nick);
+            TextView route = new TextView(this);
             String latency = peer.latencyText();
-            if (!latency.isEmpty()) text.append(", ").append(latency);
+            route.setText(peer.online
+                    ? peer.path + (latency.isEmpty() ? "" : " · " + latency)
+                    : "не в сети");
+            route.setTextColor(BoziUi.MUTED);
+            route.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            texts.addView(route);
+            row.addView(texts, BoziUi.grow());
         }
-        tunnelLine.setText(text.toString());
+
+        LinearLayout bottom = BoziUi.row(this, card);
+        TextView net = BoziUi.chipButton(this, "Соединение", false);
+        net.setOnClickListener(v -> startActivity(new Intent(this, BoziNetworkActivity.class)));
+        bottom.addView(net, BoziUi.grow());
+        TextView leave = BoziUi.chipButton(this, "Выйти", false);
+        leave.setOnClickListener(v -> leaveSession());
+        LinearLayout.LayoutParams leaveLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        leaveLp.leftMargin = BoziUi.dp(this, 10);
+        bottom.addView(leave, leaveLp);
     }
 
     private void showCode(String code, boolean open) {

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BOZI 21/09/2026 Иконка нижней панели. Контур взят из прототипа
+     как есть: свой пересчёт «на глаз» дал бы другую толщину линий,
+     и четыре иконки перестали бы выглядеть одним набором. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?android:attr/colorControlNormal">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M3.4 4.4 h17.2 v11.8 h-9.6 L6.4 20.4 v-4.2 H3.4 Z M6.6 8 h10.8 v1.7 h-10.8 Z M6.6 11.2 h7.4 v1.7 h-7.4 Z" />
+</vector>
