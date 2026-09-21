@@ -39,6 +39,15 @@ public class BoziMoreActivity extends Activity {
         loadProfile();
     }
 
+    @Override
+    public void onBackPressed() {
+        // Разделы — соседи, а не вложенные экраны: «назад» ведёт
+        // к первому разделу, а не закрывает приложение.
+        if (!BoziTabs.goBack(this, BoziTabs.MORE)) {
+            super.onBackPressed();
+        }
+    }
+
     private void build() {
         LinearLayout root = BoziUi.screenWithTabs(this, BoziTabs.MORE, R.drawable.bozi_bg_more);
         BoziUi.header(this, root, "учётная запись", BoziConfig.login(this),

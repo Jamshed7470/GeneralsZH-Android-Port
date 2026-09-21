@@ -525,10 +525,23 @@ public final class BoziApi {
      * появления нового, поэтому вызов возвращается либо с сообщениями, либо
      * через 25 секунд — опрашивать по таймеру не нужно.
      */
+    /** Личная переписка: та же лента, только адрес другой. */
+    public ChatPage direct(String login, long since) throws IOException {
+        return page("/v1/dm/" + login + "?since=" + since, since);
+    }
+
+    public void sayDirect(String login, String text) throws IOException {
+        requestObject("POST", "/v1/dm/" + login, json("text", text));
+    }
+
     public ChatPage chat(String roomCode, long since) throws IOException {
         String path = roomCode == null || roomCode.isEmpty()
                 ? "/v1/lobby/chat?since=" + since
                 : "/v1/rooms/" + roomCode + "/chat?since=" + since;
+        return page(path, since);
+    }
+
+    private ChatPage page(String path, long since) throws IOException {
         JSONObject res = parseObject(request("GET", path, null, POLL_TIMEOUT_MS));
         ChatPage page = new ChatPage();
         page.last = res.optLong("last", since);

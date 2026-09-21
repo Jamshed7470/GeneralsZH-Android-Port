@@ -603,9 +603,12 @@ final class BoziUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         View veil = new View(a);
+        // Вуаль была почти непрозрачной, и снимок под ней не читался. Сверху
+        // оставляем картинку видимой, к низу уводим в сплошной фон — там
+        // лежат списки, и им нужен ровный тёмный подклад.
         GradientDrawable gradient = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[] { withAlpha(BG, 120), withAlpha(BG, 215), BG });
+                new int[] { withAlpha(BG, 60), withAlpha(BG, 170), withAlpha(BG, 240) });
         veil.setBackground(gradient);
         stack.addView(veil, new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -760,7 +763,11 @@ final class BoziUi {
     static LinearLayout toggleRow(Activity a, LinearLayout parent, String label, String hint,
                                   boolean on, View.OnClickListener onClick) {
         LinearLayout box = listRow(a, parent, label, hint, TEXT, onClick);
-        // Стрелку из listRow тут не рисуем: у переключателя свой индикатор.
+        // Стрелка из listRow тут лишняя: у переключателя свой индикатор, а
+        // две подсказки «нажми сюда» в одной строке спорят друг с другом.
+        if (box.getChildCount() > 1) {
+            box.removeViewAt(box.getChildCount() - 1);
+        }
         View knobTrack = new View(a);
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(on ? withAlpha(ACCENT, 66) : Color.parseColor("#1b222a"));
@@ -818,6 +825,27 @@ final class BoziUi {
             view.setPadding(side, base + top, side, view.getPaddingBottom());
             return insets;
         });
+    }
+
+    /**
+     * Прокручивает экран к нужному месту.
+     *
+     * <p>Кнопка «к списку» обязана что-то делать: раньше она звала
+     * requestFocus, который на неинтерактивной коробке не делает ничего
+     * видимого, и нажатие выглядело как поломка.
+     */
+    static void scrollTo(View target) {
+        View node = target;
+        while (node.getParent() instanceof View) {
+            View parent = (View) node.getParent();
+            if (parent instanceof ScrollView) {
+                final ScrollView scroll = (ScrollView) parent;
+                final int y = target.getTop();
+                scroll.post(() -> scroll.smoothScrollTo(0, y));
+                return;
+            }
+            node = parent;
+        }
     }
 
     /** Цвет с другой прозрачностью: 0–255. */

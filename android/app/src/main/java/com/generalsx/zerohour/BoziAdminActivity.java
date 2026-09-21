@@ -44,8 +44,9 @@ public class BoziAdminActivity extends Activity {
 
     private void build() {
         LinearLayout root = BoziUi.screen(this, R.drawable.bozi_bg_admin);
-        BoziUi.title(this, root, "Администратор");
-        statusLine = BoziUi.label(this, root, "Запрашиваем состояние сервера…", BoziUi.MUTED);
+        LinearLayout head = BoziUi.header(this, root, "запрашиваем состояние…", "Сервер",
+                initials(BoziConfig.login(this)), null);
+        statusLine = (TextView) head.getChildAt(0);
 
         statsRow = BoziUi.row(this, root);
 
@@ -193,5 +194,10 @@ public class BoziAdminActivity extends Activity {
     private static String hours(long seconds) {
         if (seconds < 3600) return Math.max(0, seconds / 60) + " м";
         return (seconds / 3600) + " ч";
+    }
+
+    private static String initials(String login) {
+        if (login == null || login.isEmpty()) return "?";
+        return login.substring(0, Math.min(2, login.length())).toUpperCase();
     }
 }

@@ -59,8 +59,9 @@ public class BoziNetworkActivity extends Activity {
 
     private void build() {
         LinearLayout root = BoziUi.screen(this, R.drawable.bozi_bg_network);
-        BoziUi.title(this, root, "Соединение");
-        stateLine = BoziUi.label(this, root, "Смотрим состояние туннеля…", BoziUi.MUTED);
+        LinearLayout head = BoziUi.header(this, root, "смотрим состояние туннеля…", "Соединение",
+                initials(BoziConfig.login(this)), null);
+        stateLine = (TextView) head.getChildAt(0);
 
         LinearLayout card = BoziUi.card(this, root);
         routeLine = BoziUi.label(this, card, "Туннель выключен", BoziUi.TEXT);

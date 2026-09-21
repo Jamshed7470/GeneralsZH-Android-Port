@@ -40,6 +40,26 @@ final class BoziTabs {
 
     private BoziTabs() {}
 
+    /**
+     * Куда ведёт «назад» из раздела.
+     *
+     * <p>Разделы — соседи, а не вложенные экраны, поэтому системная кнопка
+     * «назад» закрывала приложение прямо из чата. Ожидание другое: вернуться
+     * к первому разделу, и только из него выйти. Возвращает true, если
+     * переход сделан.
+     */
+    static boolean goBack(Activity a, String from) {
+        if (LIBRARY.equals(from)) {
+            return false;
+        }
+        Intent intent = new Intent(a, BoziHomeActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        a.startActivity(intent);
+        a.overridePendingTransition(0, 0);
+        a.finish();
+        return true;
+    }
+
     /** Дорисовывает панель в низ экрана и подсвечивает текущий раздел. */
     static void attach(Activity a, LinearLayout root, String active) {
         View line = new View(a);

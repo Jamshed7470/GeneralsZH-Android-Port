@@ -119,11 +119,11 @@ public class BoziHomeActivity extends Activity {
             // первая в списке и нужна остальным), а саму сборку — ещё нет.
             BoziUi.heroCard(this, heroBox, "почти готово", "Выберите сборку",
                     "Базовая Generals уже установлена", BoziUi.MUTED,
-                    "К списку сборок", v -> catalogBox.requestFocus(), null, null);
+                    "К списку сборок", v -> BoziUi.scrollTo(catalogBox), null, null);
         } else {
             BoziUi.heroCard(this, heroBox, "начнём", "Установите игру",
                     "Сборки ниже · ставятся из приложения", BoziUi.MUTED,
-                    "К списку сборок", v -> catalogBox.requestFocus(), null, null);
+                    "К списку сборок", v -> BoziUi.scrollTo(catalogBox), null, null);
         }
     }
 

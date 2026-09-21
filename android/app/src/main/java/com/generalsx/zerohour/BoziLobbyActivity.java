@@ -49,6 +49,15 @@ public class BoziLobbyActivity extends Activity {
     }
 
     @Override
+    public void onBackPressed() {
+        // Разделы — соседи, а не вложенные экраны: «назад» ведёт
+        // к первому разделу, а не закрывает приложение.
+        if (!BoziTabs.goBack(this, BoziTabs.SESSIONS)) {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
     protected void onStart() {
         super.onStart();
         running = true;

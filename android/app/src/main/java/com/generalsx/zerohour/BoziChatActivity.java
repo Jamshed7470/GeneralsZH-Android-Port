@@ -1,6 +1,8 @@
 package com.generalsx.zerohour;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -8,6 +10,7 @@ import android.os.Looper;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -15,34 +18,49 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
- * Общий чат платформы — свой раздел, а не полоска внизу лобби.
+ * Разговоры: общий чат, чат своей сессии и личные переписки.
  *
- * <p>Раньше чат жил на экране сессий и занимал там последнюю треть: читать
- * переписку приходилось через окошко в двести точек высотой, и при появлении
- * клавиатуры от него не оставалось ничего. Здесь он занимает экран целиком.
+ * <p>Раньше чат был один на всех и жил полоской внизу лобби. Но разговор
+ * перед боем и разговор со всей платформой — разные вещи: в первом
+ * договариваются о картах и сторонах, второй нужен, чтобы вообще найти, с кем
+ * играть. А позвать конкретного человека, не крича на весь сервер, было нечем
+ * вовсе.
  *
- * <p>Сообщения приходят удержанным запросом (сервер отвечает, когда есть что
- * сказать), поэтому чужая реплика появляется сразу, а не по таймеру.
+ * <p>Ленты переключаются наверху, и у каждой свой счётчик прочитанного:
+ * переход между ними не теряет сообщения и не показывает их заново.
  */
 public class BoziChatActivity extends Activity {
+
+    /** Куда пишем: общий чат, чат сессии или личная переписка. */
+    private enum Feed { GLOBAL, ROOM, DIRECT }
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat clock = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
+    private LinearLayout tabsRow;
     private LinearLayout messagesBox;
     private ScrollView messagesScroll;
     private EditText input;
     private TextView statusLine;
-    /** Подсказка в пустом чате: убирается с первым сообщением. */
     private TextView emptyNote;
 
     private volatile boolean running;
-    private volatile long since;
+    /** Свой счётчик на каждую ленту: иначе при переключении всё дублируется. */
+    private volatile long sinceGlobal;
+    private volatile long sinceRoom;
+    private volatile long sinceDirect;
+
+    private volatile Feed feed = Feed.GLOBAL;
+    private volatile String peer = "";
     private String me = "";
+    /** Кому можно написать лично: список берём из лобби. */
+    private final List<String> online = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +71,15 @@ public class BoziChatActivity extends Activity {
         }
         me = BoziConfig.login(this);
         build();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Разделы — соседи, а не вложенные экраны: «назад» ведёт
+        // к первому разделу, а не закрывает приложение.
+        if (!BoziTabs.goBack(this, BoziTabs.CHAT)) {
+            super.onBackPressed();
+        }
     }
 
     @Override
@@ -71,19 +98,18 @@ public class BoziChatActivity extends Activity {
 
     private void build() {
         LinearLayout root = BoziUi.screenWithTabsFixed(this, BoziTabs.CHAT, R.drawable.bozi_bg_chat);
+
         LinearLayout head = BoziUi.header(this, root, "соединяемся…", "Чат",
-                initials(me), v -> startActivity(new android.content.Intent(
-                        this, BoziMoreActivity.class)));
+                initials(me), v -> startActivity(new Intent(this, BoziMoreActivity.class)));
         statusLine = (TextView) head.getChildAt(0);
 
-        // Переписка лежит прямо на фоне раздела, без рамки: карточка вокруг
-        // ленты сообщений только сужала бы её и спорила с пузырями.
+        tabsRow = BoziUi.row(this, root);
+        showFeedTabs();
+
         messagesScroll = new ScrollView(this);
         messagesBox = new LinearLayout(this);
         messagesBox.setOrientation(LinearLayout.VERTICAL);
         messagesScroll.addView(messagesBox);
-        emptyNote = BoziUi.label(this, messagesBox,
-                "Пока тихо. Напишите первым — сообщение увидят все, кто в сети.", BoziUi.MUTED);
         // Лента забирает всю оставшуюся высоту, поле ввода остаётся внизу.
         root.addView(messagesScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -94,6 +120,17 @@ public class BoziChatActivity extends Activity {
         input.setHintTextColor(BoziUi.MUTED);
         input.setTextColor(BoziUi.TEXT);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setSingleLine(true);
+        // Отправка прямо с клавиатуры: тянуться к кнопке после каждой реплики
+        // неудобно, а в чате реплики короткие и частые.
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);
+        input.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendChat();
+                return true;
+            }
+            return false;
+        });
         GradientDrawable inputBg = new GradientDrawable();
         inputBg.setColor(BoziUi.CARD);
         inputBg.setCornerRadius(BoziUi.dp(this, 12));
@@ -110,31 +147,144 @@ public class BoziChatActivity extends Activity {
         send.setPadding(BoziUi.dp(this, 14), pad, BoziUi.dp(this, 4), pad);
         send.setOnClickListener(v -> sendChat());
         sendRow.addView(send);
+
+        resetFeed();
     }
+
+    /** Переключатель лент: общий · сессия · личное. */
+    private void showFeedTabs() {
+        tabsRow.removeAllViews();
+        String code = BoziTunnel.get().status().code;
+
+        addFeedTab("Общий", feed == Feed.GLOBAL, v -> switchTo(Feed.GLOBAL, ""));
+        if (!code.isEmpty()) {
+            addFeedTab("Сессия", feed == Feed.ROOM, v -> switchTo(Feed.ROOM, ""));
+        }
+        String label = feed == Feed.DIRECT && !peer.isEmpty() ? peer : "Личное";
+        addFeedTab(label, feed == Feed.DIRECT, v -> pickPeer());
+    }
+
+    private void addFeedTab(String label, boolean active, View.OnClickListener click) {
+        TextView chip = BoziUi.languageChip(this, label, active);
+        chip.setOnClickListener(click);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.rightMargin = BoziUi.dp(this, 8);
+        tabsRow.addView(chip, lp);
+    }
+
+    /** Выбор собеседника: показываем тех, кто сейчас в сети. */
+    private void pickPeer() {
+        if (online.isEmpty()) {
+            statusLine.setText("некому писать: кроме вас никого нет в сети");
+            return;
+        }
+        String[] names = online.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+                .setTitle("Кому написать")
+                .setItems(names, (d, which) -> switchTo(Feed.DIRECT, names[which]))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void switchTo(Feed target, String withWhom) {
+        feed = target;
+        peer = withWhom;
+        // Счётчик ленты сбрасываем: при возврате в неё сервер отдаст всё, что
+        // там есть, и переписка не выглядит начатой с середины.
+        switch (feed) {
+            case GLOBAL: sinceGlobal = 0; break;
+            case ROOM: sinceRoom = 0; break;
+            case DIRECT: sinceDirect = 0; break;
+        }
+        showFeedTabs();
+        resetFeed();
+    }
+
+    /** Чистит ленту и ставит подсказку под текущий разговор. */
+    private void resetFeed() {
+        messagesBox.removeAllViews();
+        String hint;
+        switch (feed) {
+            case ROOM:
+                hint = "Чат вашей сессии. Здесь только те, кто в ней, — "
+                        + "удобно договориться о картах до начала боя.";
+                break;
+            case DIRECT:
+                hint = peer.isEmpty()
+                        ? "Выберите, кому написать."
+                        : "Личная переписка с " + peer + ". Видите только вы двое.";
+                break;
+            default:
+                hint = "Общий чат платформы. Сообщение увидят все, кто в сети.";
+        }
+        emptyNote = BoziUi.label(this, messagesBox, hint, BoziUi.MUTED);
+    }
+
+    // --- обмен с сервером ---
 
     private void pollChat() {
         while (running) {
+            Feed current = feed;
+            String withWhom = peer;
             try {
-                BoziApi.ChatPage page = new BoziApi(this).chat("", since);
-                since = page.last;
-                if (!page.messages.isEmpty()) {
+                BoziApi api = new BoziApi(this);
+                BoziApi.ChatPage page;
+                switch (current) {
+                    case ROOM: {
+                        String code = BoziTunnel.get().status().code;
+                        if (code.isEmpty()) {
+                            sleep(2000);
+                            continue;
+                        }
+                        page = api.chat(code, sinceRoom);
+                        sinceRoom = page.last;
+                        break;
+                    }
+                    case DIRECT: {
+                        if (withWhom.isEmpty()) {
+                            sleep(1500);
+                            continue;
+                        }
+                        page = api.direct(withWhom, sinceDirect);
+                        sinceDirect = page.last;
+                        break;
+                    }
+                    default: {
+                        page = api.chat("", sinceGlobal);
+                        sinceGlobal = page.last;
+                    }
+                }
+                // Пока ждали ответ, игрок мог переключить ленту — тогда эти
+                // сообщения не от неё, и показывать их нельзя.
+                if (!page.messages.isEmpty() && current == feed && withWhom.equals(peer)) {
                     ui.post(() -> showMessages(page));
                 }
             } catch (Exception e) {
-                // Сеть моргнула — подождём и попробуем снова. Ошибку на экран
-                // не выносим: чат не должен кричать из-за одного обрыва.
+                String text = BoziAuthActivity.message(e);
+                ui.post(() -> statusLine.setText(text));
                 sleep(3000);
             }
         }
     }
 
-    /** Подпись над чатом: сколько людей сейчас в сети. */
+    /** Подпись над чатом и список тех, кому можно написать лично. */
     private void pollOnline() {
         while (running) {
             try {
                 BoziApi.Lobby lobby = new BoziApi(this).lobby();
-                ui.post(() -> statusLine.setText(
-                        "в сети " + lobby.online + " · в бою " + lobby.playing));
+                ui.post(() -> {
+                    statusLine.setText("в сети " + lobby.online + " · в бою " + lobby.playing);
+                    online.clear();
+                    for (BoziApi.Player player : lobby.players) {
+                        if (!player.login.equalsIgnoreCase(me)) {
+                            online.add(player.login);
+                        }
+                    }
+                    // Сессия могла появиться или закрыться — вкладка «Сессия»
+                    // должна появляться и исчезать вместе с ней.
+                    showFeedTabs();
+                });
             } catch (Exception ignored) {
                 // Молча: чат работает и без этой строки.
             }
@@ -148,8 +298,7 @@ public class BoziChatActivity extends Activity {
             emptyNote = null;
         }
         for (BoziApi.ChatMessage message : page.messages) {
-            boolean mine = message.from.equalsIgnoreCase(me);
-            messagesBox.addView(bubble(message, mine));
+            messagesBox.addView(bubble(message, message.from.equalsIgnoreCase(me)));
         }
         messagesScroll.post(() -> messagesScroll.fullScroll(ScrollView.FOCUS_DOWN));
     }
@@ -163,7 +312,7 @@ public class BoziChatActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(mine ? BoziUi.withAlpha(BoziUi.ACCENT, 33) : BoziUi.LINE);
+        bg.setColor(mine ? BoziUi.withAlpha(BoziUi.ACCENT, 33) : BoziUi.CARD);
         bg.setCornerRadius(BoziUi.dp(this, 12));
         bg.setStroke(BoziUi.dp(this, 1),
                 mine ? BoziUi.withAlpha(BoziUi.ACCENT, 56) : BoziUi.LINE);
@@ -179,7 +328,7 @@ public class BoziChatActivity extends Activity {
 
         TextView text = new TextView(this);
         text.setText(message.text);
-        text.setTextColor(mine ? BoziUi.TEXT : BoziUi.TEXT);
+        text.setTextColor(BoziUi.TEXT);
         text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         box.addView(text);
 
@@ -203,15 +352,36 @@ public class BoziChatActivity extends Activity {
     }
 
     private void sendChat() {
-        String text = input.getText().toString().trim();
+        final String text = input.getText().toString().trim();
         if (text.isEmpty()) return;
+        if (feed == Feed.DIRECT && peer.isEmpty()) {
+            pickPeer();
+            return;
+        }
         input.setText("");
+        final Feed current = feed;
+        final String withWhom = peer;
         new Thread(() -> {
             try {
-                new BoziApi(this).say("", text);
+                BoziApi api = new BoziApi(this);
+                switch (current) {
+                    case ROOM:
+                        api.say(BoziTunnel.get().status().code, text);
+                        break;
+                    case DIRECT:
+                        api.sayDirect(withWhom, text);
+                        break;
+                    default:
+                        api.say("", text);
+                }
             } catch (Exception e) {
                 String message = BoziAuthActivity.message(e);
-                ui.post(() -> statusLine.setText(message));
+                // Текст возвращаем в поле: иначе написанное пропадает из-за
+                // одного обрыва связи, и это злит сильнее самой ошибки.
+                ui.post(() -> {
+                    statusLine.setText(message);
+                    input.setText(text);
+                });
             }
         }, "bozi-say").start();
     }
