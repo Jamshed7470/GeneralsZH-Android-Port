@@ -1,7 +1,14 @@
 package com.generalsx.zerohour;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.Settings;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.os.Bundle;
@@ -27,6 +34,8 @@ public class BoziHomeActivity extends Activity {
     private LinearLayout root;
     private LinearLayout catalogBox;
     private TextView statusLine;
+    /** Игрок ушёл выдавать разрешение — вернётся, и запуск продолжится сам. */
+    private boolean pendingLaunchAfterPermission;
     private TextView playButton;
     private boolean installing;
     private boolean pendingLaunchAfterRotation;
@@ -47,6 +56,11 @@ public class BoziHomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshPlayButton();
+        if (pendingLaunchAfterPermission && haveUserDataAccess()) {
+            pendingLaunchAfterPermission = false;
+            launchGame();
+            return;
+        }
         // Вернулись из игры — партия закончилась, сессия снова открыта для
         // входа. Состояние на сервере переключаем здесь, а не в момент выхода
         // из игры: экран игры принадлежит движку, и события выхода у нас нет.
@@ -246,9 +260,102 @@ public class BoziHomeActivity extends Activity {
      * если запустить игру в момент поворота, её замер размера окна поймает
      * промежуточное состояние и картинка окажется перевёрнутой.
      */
+    /**
+     * Проверяет доступ к общему хранилищу и создаёт папку данных игры.
+     *
+     * <p>Движок держит сохранения, настройки и карты в общей папке
+     * {@code /storage/emulated/0/Generals} — так их видно любым файловым
+     * менеджером, и туда же кладут скачанные карты. Писать в корень общего
+     * хранилища Android разрешает только по отдельному разрешению «Доступ ко
+     * всем файлам», которое выдаётся руками в настройках системы.
+     *
+     * <p>Без него игра запускается, но не может создать свою папку и падает с
+     * окном «Technical Difficulties» на чёрном экране — по этому окну
+     * невозможно догадаться, что дело в разрешении. Раньше разрешение просили
+     * только на экране выбора папки с игрой; в BOZI игры ставит само
+     * приложение, и тот экран никто не открывает, поэтому новый игрок
+     * упирался в это окно на первом же запуске.
+     *
+     * @return true, если можно запускать игру
+     */
+    private boolean ensureUserDataAccess() {
+        if (!haveUserDataAccess()) {
+            askForUserDataAccess();
+            return false;
+        }
+        createUserDataDirs();
+        return true;
+    }
+
+    private boolean haveUserDataAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        }
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void askForUserDataAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            // До Android 11 хватает обычного разрешения, системного экрана нет.
+            requestPermissions(new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1101);
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Нужен доступ к файлам")
+                .setMessage("Игра хранит сохранения, настройки и карты в общей папке "
+                        + "Generals в памяти телефона. Android разрешает это только по "
+                        + "отдельному разрешению.\n\n"
+                        + "Сейчас откроются настройки — включите «Доступ ко всем файлам» "
+                        + "для BOZI и вернитесь назад. Игра запустится сама.")
+                .setPositiveButton("Открыть настройки", (d, which) -> {
+                    pendingLaunchAfterPermission = true;
+                    try {
+                        Intent intent = new Intent(
+                                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                        intent.setData(Uri.parse("package:" + getPackageName()));
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        // На некоторых прошивках экрана «для приложения» нет —
+                        // открываем общий список.
+                        try {
+                            startActivity(new Intent(
+                                    Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                        } catch (Exception ignored) {
+                            pendingLaunchAfterPermission = false;
+                            statusLine.setText("Откройте настройки телефона и разрешите "
+                                    + "BOZI доступ ко всем файлам");
+                        }
+                    }
+                })
+                .setNegativeButton("Не сейчас", null)
+                .show();
+    }
+
+    /**
+     * Создаёт папки данных заранее, не дожидаясь движка.
+     *
+     * <p>Движок создаёт их сам, но молча: если что-то пошло не так, игрок
+     * увидит только окно серьёзной ошибки. Создав их здесь, мы и проверяем
+     * право на запись в понятном месте, и оставляем игроку папку, куда он
+     * может положить свои карты ещё до первого запуска.
+     */
+    private void createUserDataDirs() {
+        File root = Environment.getExternalStorageDirectory();
+        if (root == null) {
+            return;
+        }
+        File generals = new File(root, "Generals");
+        new File(generals, "Command and Conquer Generals Data").mkdirs();
+        new File(generals, "Command and Conquer Generals Zero Hour Data").mkdirs();
+    }
+
     private void launchGame() {
         if (!BoziInstall.readyToPlay(this)) {
             statusLine.setText("Сначала установите игру");
+            return;
+        }
+        if (!ensureUserDataAccess()) {
             return;
         }
         reportSessionState("playing");

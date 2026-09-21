@@ -187,7 +187,12 @@ public class GeneralsZHActivity extends SDLActivity {
         if (root == null) {
             return;
         }
-        File[] dataDirs = new File(root, "Generals").listFiles();
+        // Папки заводим сами: на первом запуске их ещё нет, а движок создаёт
+        // их позже, чем читает настройки.
+        File generals = new File(root, "Generals");
+        new File(generals, "Command and Conquer Generals Data").mkdirs();
+        new File(generals, "Command and Conquer Generals Zero Hour Data").mkdirs();
+        File[] dataDirs = generals.listFiles();
         if (dataDirs == null) {
             return;
         }
