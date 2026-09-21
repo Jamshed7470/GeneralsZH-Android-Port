@@ -86,6 +86,11 @@ public class BoziHomeActivity extends Activity {
         BoziUi.sectionTitle(this, root, "Ещё");
         BoziUi.button(this, root, "Настройки движка и графики", false,
                 v -> startActivity(new Intent(this, SetupActivity.class)));
+        // Прямой вход в журнал: когда игра падает у человека на другом конце
+        // города, единственный способ понять причину — попросить его прислать
+        // лог, а искать его внутри экрана настроек движка никто не станет.
+        BoziUi.button(this, root, "Журнал ошибок", false,
+                v -> startActivity(new Intent(this, LogViewerActivity.class)));
         BoziUi.button(this, root, "Выйти из учётной записи", false,
                 v -> BoziAuthActivity.signOut(this));
 
