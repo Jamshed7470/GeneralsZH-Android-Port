@@ -31,8 +31,10 @@
 
 package com.generalsx.zerohour;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetManager;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -130,7 +132,61 @@ public class GeneralsZHActivity extends SDLActivity {
             }
         }
 
+        acquireMulticastLock();
+
         super.onCreate(savedInstanceState);
+    }
+
+    // BOZI @bugfix 21/09/2026 Два телефона в одной сети Wi-Fi не видели игр
+    // друг друга: список «Игры» оставался пустым, хотя оба были в приёмной
+    // сети, на одном роутере и пинговались.
+    //
+    // Generals ищет соперников широковещательным пакетом на 255.255.255.255.
+    // Отправка работает всегда, а вот приём — нет: драйвер Wi-Fi в Android
+    // по умолчанию отбрасывает входящие широковещательные и многоадресные
+    // кадры, не доводя их до приложения, ради экономии батареи. Пока
+    // приложение не возьмёт MulticastLock, оно физически не слышит чужие
+    // объявления игр — и каждая сторона видит только себя, что и выглядит
+    // как «сеть не находит».
+    //
+    // Замок берётся на время работы экрана игры и отпускается вместе с ним:
+    // держать его постоянно значит зря тратить батарею, а брать позже, к
+    // моменту входа в сетевое меню, неоткуда — это код движка.
+    private WifiManager.MulticastLock multicastLock;
+
+    private void acquireMulticastLock() {
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext()
+                    .getSystemService(Context.WIFI_SERVICE);
+            if (wifi == null) {
+                return;
+            }
+            multicastLock = wifi.createMulticastLock("bozi-lan");
+            multicastLock.setReferenceCounted(false);
+            multicastLock.acquire();
+            Log.i(TAG, "multicast lock acquired: LAN discovery can receive broadcasts");
+        } catch (Exception e) {
+            // Не повод не запускать игру: без замка не работает только поиск
+            // соперников в локальной сети, всё остальное не затронуто.
+            Log.w(TAG, "multicast lock unavailable", e);
+        }
+    }
+
+    private void releaseMulticastLock() {
+        try {
+            if (multicastLock != null && multicastLock.isHeld()) {
+                multicastLock.release();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            multicastLock = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        releaseMulticastLock();
+        super.onDestroy();
     }
 
     // GeneralsX @bugfix Android port 02/08/2026 A tester reported the camera
