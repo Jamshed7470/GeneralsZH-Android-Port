@@ -58,6 +58,13 @@
          login (GeneralsOnlineActivity) and, eventually, the native
          multiplayer client both need plain outbound HTTPS/WebSocket. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- BOZI: приём широковещательных пакетов Wi-Fi. Без них Generals не
+         находит чужие игры в локальной сети: Android глушит входящий
+         широковещательный трафик, пока приложение не возьмёт MulticastLock,
+         а для замка нужны эти два разрешения (оба обычные, у игрока ничего
+         не спрашивается). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- BOZI: туннель игровой сети. Служба переднего плана нужна, чтобы система
          не усыпила связь, пока игрок в бою; тип systemExempted — тот, что
          Android отводит приложениям с VpnService. Уведомление показывает адрес
