@@ -109,6 +109,24 @@ public class GeneralsZHActivity extends SDLActivity {
             return;
         }
 
+        // BOZI @bugfix 21/09/2026 Та же осторожность, но про другую ошибку.
+        //
+        // isValidGameFolder выше принимает и базовую Generals (INI.big), а в
+        // сборке собран движок Zero Hour и только он. На базовых данных он
+        // доходит до первого отсутствующего файла дополнения и бросает
+        // исключение в GameEngine::init — игрок видит чёрный экран с окном
+        // «Technical Difficulties», по которому ничего не понять. Лучше
+        // честно сказать словами и вернуть человека к выбору сборки.
+        File dataDir = haveCustomPath ? new File(gamePath) : legacyGameDataDir();
+        if (dataDir == null || !BoziInstall.isZeroHourData(dataDir)) {
+            Log.i(TAG, "папка без данных Zero Hour: " + dataDir);
+            android.widget.Toast.makeText(this,
+                    "Это данные базовой Generals. Установите сборку на основе Zero Hour.",
+                    android.widget.Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
         // GeneralsX @bugfix Android port 12/07/2026 GeneralsOnline session
         // tokens expire server-side within hours, but native code reads a
         // static token from the session marker file -- a player who signed in

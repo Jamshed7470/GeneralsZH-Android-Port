@@ -105,6 +105,11 @@ public class BoziHomeActivity extends Activity {
         if (ready) {
             String path = BoziInstall.currentGamePath(this);
             statusLine.setText("Игра готова: " + new File(path == null ? "" : path).getName());
+        } else if (BoziInstall.currentBasePath(this) != null) {
+            // Частый случай на чистом телефоне: базовую игру поставили (она
+            // первая в списке и нужна остальным), а саму сборку — ещё нет.
+            statusLine.setText("Базовая Generals установлена. Осталось выбрать сборку "
+                    + "на её основе — например, Zero Hour + Contra 007.");
         } else {
             statusLine.setText("Игра ещё не установлена — выберите её в списке ниже.");
         }
@@ -158,7 +163,15 @@ public class BoziHomeActivity extends Activity {
                 BoziUi.label(this, card, "Файл ещё не выложен на сервер", BoziUi.BAD);
                 continue;
             }
-            if (installed && !game.addon) {
+            if (installed && !game.addon && !BoziInstall.playable(this, game.id)) {
+                // Базовая Generals: в сборке только движок Zero Hour, запускать
+                // её нечем. Раньше здесь была кнопка «Играть», и первый запуск
+                // на чистом телефоне кончался окном «Technical Difficulties».
+                BoziUi.label(this, card, "Установлена · " + size, BoziUi.OK);
+                BoziUi.label(this, card,
+                        "Нужна как основа: сама по себе не запускается, "
+                                + "на ней работают сборки ниже.", BoziUi.MUTED);
+            } else if (installed && !game.addon) {
                 BoziUi.label(this, card, "Установлена · " + size, BoziUi.OK);
                 BoziUi.button(this, card, "Играть", true, v -> {
                     selectAndLaunch(game);

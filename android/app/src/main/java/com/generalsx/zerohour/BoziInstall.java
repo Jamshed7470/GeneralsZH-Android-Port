@@ -292,11 +292,20 @@ public final class BoziInstall {
         }
         File plain = resolveDataDir(installedDir, "INI.big");
         if (new File(plain, "INI.big").isFile()) {
-            // Это базовая Generals: она и сама по себе игра, и источник данных
-            // для дополнения. Записываем её обоими путями, если дополнения ещё
-            // нет — иначе только как базу.
+            // BOZI @bugfix 21/09/2026 Базовая Generals — ТОЛЬКО источник
+            // данных, запускать её нельзя.
+            //
+            // В APK собран движок Zero Hour (цель z_generals), базовой игры в
+            // сборке порта нет вовсе. Раньше здесь базовая игра записывалась и
+            // как текущая, если дополнения ещё не было, — и первый же запуск
+            // на чистом телефоне кончался чёрным экраном с окном «Technical
+            // Difficulties»: движок Zero Hour искал в базовых данных свои
+            // файлы (падал на Data\INI\Default\Weather.ini, которого в
+            // INI.big нет) и бросал исключение прямо в GameEngine::init().
+            //
+            // Половина моделей, звуков и карт дополнения лежит в базовой игре,
+            // поэтому путь к ней нужен — но как к базе, и только.
             saveBasePath(context, plain);
-            if (currentGamePath(context) == null) saveGamePath(context, plain);
         }
     }
 
@@ -326,10 +335,30 @@ public final class BoziInstall {
         return prefs.getString(SetupActivity.PREF_BASE_GENERALS_PATH, null);
     }
 
-    /** Готова ли игра к запуску: путь задан и по нему действительно есть данные. */
+    /**
+     * Готова ли игра к запуску.
+     *
+     * <p>Мало того, что путь задан и данные на месте: данные должны быть
+     * именно от Zero Hour. Движок в сборке — только его, и на базовой
+     * Generals он падает на первом же отсутствующем файле. Проверка по
+     * INIZH.big, а не по названию игры в каталоге: так же честно работают и
+     * будущие сборки на основе Zero Hour.
+     */
     public static boolean readyToPlay(Context context) {
         String path = currentGamePath(context);
-        return path != null && SetupActivity.isValidGameFolder(new File(path));
+        return path != null && SetupActivity.isValidGameFolder(new File(path))
+                && isZeroHourData(new File(path));
+    }
+
+    /** Данные дополнения Zero Hour — то единственное, что умеет наш движок. */
+    public static boolean isZeroHourData(File dir) {
+        return dir != null && hasFile(dir, "INIZH.big");
+    }
+
+    /** Можно ли запустить установленную игру, а не только взять из неё данные. */
+    public static boolean playable(Context context, String id) {
+        File dir = gameDir(context, id);
+        return dir.isDirectory() && isZeroHourData(dir);
     }
 
     private static void saveGamePath(Context context, File dir) throws IOException {
