@@ -36,6 +36,7 @@ import android.content.Intent;
 import android.content.res.AssetManager;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 
 import androidx.core.view.WindowCompat;
@@ -133,6 +134,7 @@ public class GeneralsZHActivity extends SDLActivity {
         }
 
         acquireMulticastLock();
+        pinLanIpToTunnel();
 
         super.onCreate(savedInstanceState);
     }
@@ -152,6 +154,90 @@ public class GeneralsZHActivity extends SDLActivity {
     // Замок берётся на время работы экрана игры и отпускается вместе с ним:
     // держать его постоянно значит зря тратить батарею, а брать позже, к
     // моменту входа в сетевое меню, неоткуда — это код движка.
+    // BOZI @bugfix 21/09/2026 Из разных сетей телефоны не видели друг друга:
+    // в приёмной сети каждый показывал только себя, хотя туннель стоял и
+    // соперник был в сессии.
+    //
+    // Игра сама выбирает, с какого адреса разговаривать: перебирает адреса
+    // устройства и берёт НАИМЕНЬШИЙ (IPEnumeration складывает список по
+    // возрастанию, меню берёт первый). На Wi-Fi туннельный 10.42.0.1
+    // случайно оказывается меньше домашнего 192.168.0.x и всё работает, а на
+    // мобильном интернете адрес оператора (10.8.x.x) меньше туннельного —
+    // и игра уходит в сеть оператора мимо туннеля. Отсюда и складывалось
+    // «в одной сети видит, в разных нет».
+    //
+    // У движка есть штатный способ это задать: ключ IPAddress в Options.ini
+    // (GlobalData читает его через OptionPreferences::getLANIPAddress и
+    // кладёт в m_defaultIP, а меню сети предпочитает m_defaultIP своему
+    // перебору). Второй ключ, GameSpyIPAddress, тем же путём управляет
+    // экраном прямого соединения. Пишем оба перед каждым запуском игры.
+    //
+    // Когда сессии нет, ключи убираются: иначе игра осталась бы привязана к
+    // мёртвому адресу прошлого боя. Движок в этом случае проверяет, есть ли
+    // такой адрес на устройстве, и молча возвращается к своему перебору —
+    // но лишний мусор в настройках сбивает с толку при разборе жалоб.
+    private void pinLanIpToTunnel() {
+        String vip = "";
+        try {
+            vip = BoziTunnel.get().status().vip;
+        } catch (Exception e) {
+            Log.w(TAG, "не спросить адрес туннеля", e);
+        }
+        File root = Environment.getExternalStorageDirectory();
+        if (root == null) {
+            return;
+        }
+        File[] dataDirs = new File(root, "Generals").listFiles();
+        if (dataDirs == null) {
+            return;
+        }
+        for (File dir : dataDirs) {
+            if (dir.isDirectory()) {
+                writeLanIp(new File(dir, "Options.ini"), vip);
+            }
+        }
+    }
+
+    /** Переписывает в Options.ini два ключа адреса, не трогая остальные. */
+    private void writeLanIp(File options, String vip) {
+        try {
+            StringBuilder out = new StringBuilder();
+            if (options.isFile()) {
+                try (java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(new java.io.FileInputStream(options), "UTF-8"))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        String key = line.split("=", 2)[0].trim();
+                        if (key.equals("IPAddress") || key.equals("GameSpyIPAddress")) {
+                            continue;
+                        }
+                        out.append(line).append('
+');
+                    }
+                }
+            }
+            if (!vip.isEmpty()) {
+                out.append("GameSpyIPAddress = ").append(vip).append('
+');
+                out.append("IPAddress = ").append(vip).append('
+');
+            }
+            File parent = options.getParentFile();
+            if (parent == null || (!parent.isDirectory() && !parent.mkdirs())) {
+                return;
+            }
+            try (OutputStream w = new FileOutputStream(options)) {
+                w.write(out.toString().getBytes("UTF-8"));
+            }
+            Log.i(TAG, "адрес игры в " + options.getParent() + " -> "
+                    + (vip.isEmpty() ? "выбор движка" : vip));
+        } catch (Exception e) {
+            // Не повод не запускать игру: без ключа ломается только сетевая
+            // игра через туннель, одиночная и обычный LAN работают как были.
+            Log.w(TAG, "не записать адрес в " + options, e);
+        }
+    }
+
     private WifiManager.MulticastLock multicastLock;
 
     private void acquireMulticastLock() {
