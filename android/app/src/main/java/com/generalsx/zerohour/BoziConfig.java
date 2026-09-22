@@ -84,6 +84,27 @@ public final class BoziConfig {
         prefs(context).edit().remove(KEY_TOKEN).apply();
     }
 
+    // --- последняя сессия ---
+
+    private static final String KEY_LAST_CODE = "lastCode";
+
+    /**
+     * Код сессии, в которой игрок был перед закрытием приложения.
+     *
+     * <p>Сама сессия живёт в памяти и не переживает перезапуск, а комната на
+     * сервере — переживает. Без записи игрок после перезапуска не мог ни
+     * вернуться в свою же комнату, ни закрыть её. Закрытые (не публичные)
+     * комнаты в общем списке не видны вовсе, так что код — единственная
+     * ниточка к ним.
+     */
+    public static String lastCode(Context context) {
+        return prefs(context).getString(KEY_LAST_CODE, "");
+    }
+
+    public static void setLastCode(Context context, String code) {
+        prefs(context).edit().putString(KEY_LAST_CODE, code == null ? "" : code).apply();
+    }
+
     // --- сеть ---
 
     private static final String KEY_RELAY_ONLY = "relayOnly";

@@ -37,6 +37,8 @@ public class BoziLobbyActivity extends Activity {
     private volatile boolean running;
     private String myCode = "";
     private LinearLayout tunnelBox;
+    /** Коды из общего списка: для них карточка «вы были в сессии» лишняя. */
+    private final java.util.Set<String> listedCodes = new java.util.HashSet<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -167,6 +169,7 @@ public class BoziLobbyActivity extends Activity {
                 String code = BoziTunnel.get().hostGame(this, BoziConfig.login(this),
                         "zerohour", title, open);
                 myCode = code;
+                BoziConfig.setLastCode(this, code);
                 ui.post(() -> {
                     statusLine.setText("Сессия создана. Код: " + code);
                     showCode(code, open);
@@ -198,12 +201,18 @@ public class BoziLobbyActivity extends Activity {
             try {
                 BoziTunnel.get().joinGame(this, code, BoziConfig.login(this));
                 myCode = BoziTunnel.get().status().code;
+                BoziConfig.setLastCode(this, myCode);
                 ui.post(() -> {
                     statusLine.setText("Вы в сессии " + myCode);
                     startTunnel();
                 });
             } catch (Exception e) {
                 String text = BoziAuthActivity.message(e);
+                // Комнаты уже нет — забываем её, иначе карточка «вернуться»
+                // предлагала бы возвращаться в пустоту при каждом запуске.
+                if (text.contains("не найдена")) {
+                    BoziConfig.setLastCode(this, "");
+                }
                 ui.post(() -> statusLine.setText(text));
             }
         }, "bozi-join").start();
@@ -243,6 +252,7 @@ public class BoziLobbyActivity extends Activity {
         BoziVpnService.stop(this);
         BoziTunnel.get().stop();
         myCode = "";
+        BoziConfig.setLastCode(this, "");
         tunnelBox.removeAllViews();
         statusLine.setText("Вы вышли из сессии");
     }
@@ -252,6 +262,7 @@ public class BoziLobbyActivity extends Activity {
         statusLine.setText("В сети " + lobby.online + " · в бою " + lobby.playing);
 
         sessionsBox.removeAllViews();
+        listedCodes.clear();
         if (lobby.sessions.isEmpty()) {
             BoziUi.label(this, sessionsBox, "Открытых сессий нет. Создайте свою — её увидят все.",
                     BoziUi.MUTED);
@@ -275,9 +286,26 @@ public class BoziLobbyActivity extends Activity {
                         + pips(session.players, session.maxPlayers)
                         + "  " + session.players + " из " + session.maxPlayers, BoziUi.MUTED);
 
-                if (!playing && session.players < session.maxPlayers) {
+                boolean mine = session.host.equalsIgnoreCase(lobby.me);
+                boolean inside = session.code.equalsIgnoreCase(BoziTunnel.get().status().code);
+                if (mine && !inside) {
+                    // Своя комната, в которой меня нет: приложение перезапустили,
+                    // а комната на сервере осталась. Два выхода — вернуться на
+                    // своё место или закрыть её совсем.
+                    LinearLayout actions = BoziUi.row(this, card);
+                    TextView back = BoziUi.chipButton(this, "Вернуться", true);
+                    back.setOnClickListener(v -> join(session.code));
+                    actions.addView(back, BoziUi.grow());
+                    TextView close = BoziUi.chipButton(this, "Закрыть", false);
+                    close.setOnClickListener(v -> closeRoom(session.code));
+                    LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    closeLp.leftMargin = BoziUi.dp(this, 10);
+                    actions.addView(close, closeLp);
+                } else if (!mine && !inside && !playing && session.players < session.maxPlayers) {
                     BoziUi.button(this, card, "Присоединиться", false, v -> join(session.code));
                 }
+                listedCodes.add(session.code.toUpperCase());
             }
         }
 
@@ -300,6 +328,60 @@ public class BoziLobbyActivity extends Activity {
                 }
             }
         }
+    }
+
+    /**
+     * Карточка сессии, в которой игрок был до перезапуска.
+     *
+     * <p>Нужна для закрытых комнат: их нет в общем списке, и без этой
+     * карточки к ним не было бы никакого пути — ни вернуться, ни закрыть.
+     * Для публичных то же самое умеет строка в списке, поэтому дублировать
+     * её не нужно.
+     */
+    private void showRemembered() {
+        String code = BoziConfig.lastCode(this);
+        if (code.isEmpty() || listedCodes.contains(code.toUpperCase())) {
+            return;
+        }
+        LinearLayout card = BoziUi.card(this, tunnelBox);
+        BoziUi.eyebrow(this, card, "вы были в сессии");
+        TextView label = BoziUi.label(this, card, code, BoziUi.ACCENT);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        label.setTypeface(android.graphics.Typeface.MONOSPACE);
+        BoziUi.label(this, card, "Приложение перезапускалось. Вернуться на своё место "
+                + "или закрыть сессию, если она больше не нужна.", BoziUi.MUTED);
+        LinearLayout actions = BoziUi.row(this, card);
+        TextView back = BoziUi.chipButton(this, "Вернуться", true);
+        back.setOnClickListener(v -> join(code));
+        actions.addView(back, BoziUi.grow());
+        TextView close = BoziUi.chipButton(this, "Закрыть", false);
+        close.setOnClickListener(v -> closeRoom(code));
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        closeLp.leftMargin = BoziUi.dp(this, 10);
+        actions.addView(close, closeLp);
+    }
+
+    /** Закрывает свою комнату на сервере — по учётной записи, без секрета. */
+    private void closeRoom(String code) {
+        statusLine.setText("Закрываем " + code + "…");
+        new Thread(() -> {
+            try {
+                new BoziApi(this).closeRoom(code);
+                BoziConfig.setLastCode(this, "");
+                ui.post(() -> {
+                    statusLine.setText("Сессия " + code + " закрыта");
+                    tunnelBox.removeAllViews();
+                });
+            } catch (Exception e) {
+                String text = BoziAuthActivity.message(e);
+                // Уже закрыта или истекла — цель достигнута, запись не нужна.
+                if (text.contains("не найдена")) {
+                    BoziConfig.setLastCode(this, "");
+                }
+                ui.post(() -> statusLine.setText(text));
+            }
+        }, "bozi-close").start();
     }
 
     /** Ряд точек: занятые места закрашены, свободные пустые. */
@@ -329,6 +411,7 @@ public class BoziLobbyActivity extends Activity {
             if (!status.error.isEmpty()) {
                 BoziUi.label(this, tunnelBox, status.error, BoziUi.BAD);
             }
+            showRemembered();
             return;
         }
 
