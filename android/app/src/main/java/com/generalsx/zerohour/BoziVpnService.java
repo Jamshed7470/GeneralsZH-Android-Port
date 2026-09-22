@@ -141,7 +141,11 @@ public class BoziVpnService extends VpnService implements glnet.Protector {
     }
 
     private void shutdown() {
-        BoziTunnel.get().stop();
+        // Остановка сессии долгая (ждёт фоновые циклы сетевой части), а
+        // сюда система приходит в главном потоке. Дескриптор закрываем сразу,
+        // а сессию гасим в фоне: второй вызов stop() увидит пустую ссылку и
+        // ничего не сделает, так что гонки с экраном лобби нет.
+        new Thread(() -> BoziTunnel.get().stop(), "bozi-tunnel-stop").start();
         if (tun != null) {
             try {
                 tun.close();

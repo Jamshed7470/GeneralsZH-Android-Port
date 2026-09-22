@@ -248,13 +248,23 @@ public class BoziLobbyActivity extends Activity {
         }
     }
 
+    /**
+     * Выход из сессии.
+     *
+     * <p>Остановка туннеля долгая (см. BoziTunnel.stop), и в главном потоке
+     * она вешала приложение до системного «не отвечает». Экран отпускаем
+     * сразу, а работу делаем в фоне; серверу «вышел» уходит в конце неё.
+     */
     private void leaveSession() {
-        BoziVpnService.stop(this);
-        BoziTunnel.get().stop();
         myCode = "";
         BoziConfig.setLastCode(this, "");
         tunnelBox.removeAllViews();
-        statusLine.setText("Вы вышли из сессии");
+        statusLine.setText("выходим из сессии…");
+        new Thread(() -> {
+            BoziVpnService.stop(this);
+            BoziTunnel.get().stop();
+            ui.post(() -> statusLine.setText("вы вышли из сессии"));
+        }, "bozi-leave").start();
     }
 
     /** Показывает, как идёт связь с каждым соперником. */
