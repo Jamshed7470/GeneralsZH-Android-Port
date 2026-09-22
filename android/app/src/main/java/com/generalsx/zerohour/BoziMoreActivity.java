@@ -86,20 +86,31 @@ public class BoziMoreActivity extends Activity {
     }
 
     /**
-     * Языки плиткой по два в ряд.
+     * Языки приложения: русский и английский.
      *
-     * <p>Их четырнадцать, и списком в полную ширину они занимали пол-экрана
-     * прокрутки — ради настройки, которую меняют один раз в жизни.
+     * <p>Перевод есть на четырнадцать языков — он достался от порта игры и
+     * остаётся в настройках движка. Но платформой пользуются свои, и список
+     * из четырнадцати плиток ради двух нужных только мешал выбрать.
      */
+    private static final String[] APP_LANGUAGES = { "ru", "en" };
+
+    /** Языки плиткой: два чипа в ряд, а не две строки во всю ширину. */
     private void showLanguages(LinearLayout parent) {
         String current = LocaleHelper.getSavedLanguageTag(this);
+        if (current.isEmpty()) {
+            // Ничего не выбрано — значит, язык берётся из системы. Отмечаем
+            // тот, на котором приложение сейчас и говорит: иначе ни один чип
+            // не подсвечен, и экран выглядит сломанным.
+            current = java.util.Locale.getDefault().getLanguage().startsWith("ru") ? "ru" : "en";
+        }
         LinearLayout row = null;
         int inRow = 0;
-        for (String tag : LocaleHelper.SUPPORTED_TAGS) {
+        for (String tag : APP_LANGUAGES) {
             if (inRow == 0) {
                 row = BoziUi.row(this, parent);
             }
-            boolean active = tag.equals(current);
+            final String selected = current;
+            boolean active = tag.equals(selected);
             TextView chip = BoziUi.languageChip(this, LocaleHelper.displayNameFor(this, tag), active);
             chip.setOnClickListener(v -> {
                 LocaleHelper.setSavedLanguageTag(this, tag);
