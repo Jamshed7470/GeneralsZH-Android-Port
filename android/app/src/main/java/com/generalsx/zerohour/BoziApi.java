@@ -239,6 +239,10 @@ public final class BoziApi {
         public boolean needsBase;
         /** Версия служебного файла (для движка — versionCode APK). */
         public long version;
+        /** Контрольная сумма архива — по ней движок понимает, что игра обновилась. */
+        public String sha256 = "";
+        /** Для компьютерной игры из админки: как запускать (JSON от агента). */
+        public String manifest = "";
 
         public String sizeText() {
             if (sizeBytes <= 0) return "";
@@ -255,8 +259,13 @@ public final class BoziApi {
         collect(extras, res.optJSONArray("extras"), false);
         engine = null;
         for (Game g : extras) if (BoziPcGames.ENGINE_ID.equals(g.id)) engine = g;
+        pcGames = new ArrayList<>();
+        collect(pcGames, res.optJSONArray("pcgames"), false);
         return out;
     }
+
+    /** Компьютерные игры из админки (последний ответ каталога). */
+    public List<Game> pcGames = new ArrayList<>();
 
     /** Движок компьютерных игр из последнего ответа каталога; null — не выложен. */
     public Game engine;
@@ -276,6 +285,9 @@ public final class BoziApi {
             g.ready = o.optBoolean("ready", false);
             g.needsBase = o.optBoolean("needsBase", false);
             g.version = o.optLong("version", 0);
+            g.sha256 = o.optString("sha256", "");
+            JSONObject manifest = o.optJSONObject("manifest");
+            g.manifest = manifest != null ? manifest.toString() : "";
             g.addon = addon;
             out.add(g);
         }

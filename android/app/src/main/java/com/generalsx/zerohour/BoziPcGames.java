@@ -26,13 +26,16 @@ import java.io.IOException;
  * дальше просто просит его запустить игру — игрок видит одну кнопку
  * «Играть».
  *
- * <p>Сами игры сервер не раздаёт: движок находит на телефоне папку, которую
- * положил пользователь.
+ * <p>Игры бывают двух видов: свои у пользователя (движок находит их на
+ * телефоне, Steam — вход в свой аккаунт) и добавленные через админку — их
+ * движок качает с нашего сервера сам.
  */
 final class BoziPcGames {
     static final String ENGINE_PACKAGE = "com.winlator";
     static final String ENGINE_ID = "bozi-engine";
     private static final String ACTION_PLAY = "com.bozi.action.PLAY";
+    /** С этой версии движок умеет сам качать игры из админки. */
+    static final long SERVER_GAMES_MIN_ENGINE = 38;
 
     /** Компьютерная игра, которую умеет запускать движок. */
     static final class PcGame {
@@ -66,6 +69,23 @@ final class BoziPcGames {
         } catch (PackageManager.NameNotFoundException e) {
             return -1;
         }
+    }
+
+    /**
+     * Игра из админки: движок сам скачает её с нашего сервера, поэтому ему
+     * передаются описание запуска, размер, сумма и токен входа.
+     */
+    static void playServerGame(Activity activity, BoziApi.Game game) throws ActivityNotFoundException {
+        Intent intent = new Intent(ACTION_PLAY);
+        intent.setPackage(ENGINE_PACKAGE);
+        intent.putExtra("game", game.id);
+        intent.putExtra("title", game.title);
+        intent.putExtra("manifest", game.manifest);
+        intent.putExtra("size", game.sizeBytes);
+        intent.putExtra("sha256", game.sha256);
+        intent.putExtra("unpacked_mb", game.unpackedMb);
+        intent.putExtra("token", BoziConfig.token(activity));
+        activity.startActivity(intent);
     }
 
     static void play(Activity activity, PcGame game) throws ActivityNotFoundException {
