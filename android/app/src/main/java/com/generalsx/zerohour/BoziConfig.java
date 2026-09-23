@@ -14,7 +14,7 @@ import android.content.SharedPreferences;
 public final class BoziConfig {
     public static final String PREFS = "bozi";
 
-    public static final String DEFAULT_HOST = "185.228.72.145";
+    public static final String DEFAULT_HOST = "194.124.250.108";
     public static final int DEFAULT_API_PORT = 7443;
     /** Порт ретранслятора: через него идут пакеты игры, когда прямой путь закрыт. */
     public static final int DEFAULT_RELAY_PORT = 7777;
