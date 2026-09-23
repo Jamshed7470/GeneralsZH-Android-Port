@@ -58,6 +58,14 @@
          login (GeneralsOnlineActivity) and, eventually, the native
          multiplayer client both need plain outbound HTTPS/WebSocket. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- BOZI сам ставит движок компьютерных игр (Wine) со своего сервера. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Без этого на Android 11+ BOZI не видит установленный движок и
+         не может попросить его запустить игру. -->
+    <queries>
+        <package android:name="com.winlator" />
+    </queries>
     <!-- BOZI: приём широковещательных пакетов Wi-Fi. Без них Generals не
          находит чужие игры в локальной сети: Android глушит входящий
          широковещательный трафик, пока приложение не возьмёт MulticastLock,

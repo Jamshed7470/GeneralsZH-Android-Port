@@ -43,6 +43,10 @@ public class BoziHomeActivity extends Activity {
     private boolean installing;
     private boolean pendingLaunchAfterRotation;
     private List<BoziApi.Game> catalog = new ArrayList<>();
+    private LinearLayout pcBox;
+    /** Движок компьютерных игр на сервере; null — не выложен или каталог не загружен. */
+    private BoziApi.Game engine;
+    private boolean engineBusy;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +63,8 @@ public class BoziHomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshPlayButton();
+        // Вернулись из системной установки движка — показать «Играть».
+        if (pcBox != null) showPcGames();
         if (pendingLaunchAfterPermission && haveUserDataAccess()) {
             pendingLaunchAfterPermission = false;
             launchGame();
@@ -87,6 +93,12 @@ public class BoziHomeActivity extends Activity {
         catalogBox = new LinearLayout(this);
         catalogBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(catalogBox, BoziUi.params(this, 0, 8));
+
+        BoziUi.eyebrow(this, root, "компьютерные игры").setLayoutParams(BoziUi.params(this, 22, 12));
+        pcBox = new LinearLayout(this);
+        pcBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(pcBox, BoziUi.params(this, 0, 8));
+        showPcGames();
 
         statusLine = BoziUi.label(this, root,
                 "Файлы раздаёт только сервер BOZI — поэтому у всех в сессии одна версия сборки.",
@@ -150,9 +162,12 @@ public class BoziHomeActivity extends Activity {
             try {
                 BoziApi api = new BoziApi(this);
                 List<BoziApi.Game> games = api.catalog();
+                BoziApi.Game serverEngine = api.engine;
                 ui.post(() -> {
                     catalog = games;
+                    engine = serverEngine;
                     showCatalog();
+                    showPcGames();
                 });
             } catch (Exception e) {
                 String text = BoziAuthActivity.message(e);
@@ -207,6 +222,69 @@ public class BoziHomeActivity extends Activity {
                 action.setOnClickListener(v -> startInstall(game, action));
             }
         }
+    }
+
+    /**
+     * Компьютерные игры (через движок на Wine). Состояние карточки: движка
+     * нет → «Установить», движок устарел → «Обновить», иначе «Играть».
+     */
+    private void showPcGames() {
+        pcBox.removeAllViews();
+        long have = BoziPcGames.installedEngineVersion(this);
+        boolean outdated = engine != null && have >= 0 && have < engine.version;
+        for (BoziPcGames.PcGame game : BoziPcGames.GAMES) {
+            if (have < 0 || outdated) {
+                boolean available = engine != null && engine.ready;
+                String size = engine != null ? engine.sizeText() : "";
+                String state = !available ? "Движок ещё не выложен на сервер"
+                        : outdated ? "Вышло обновление движка · " + size
+                        : "Нужен движок компьютерных игр · " + size;
+                LinearLayout card = BoziUi.gameCard(this, pcBox, game.title, game.subtitle,
+                        state, available ? BoziUi.MUTED : BoziUi.BAD,
+                        !available ? "Скоро" : outdated ? "Обновить" : "Установить", available, null);
+                TextView action = (TextView) card.getChildAt(card.getChildCount() - 1);
+                if (available) action.setOnClickListener(v -> installEngine(action));
+            } else {
+                BoziUi.gameCard(this, pcBox, game.title, game.subtitle,
+                        "Готово · " + game.howToGet, BoziUi.OK, "Играть", true, v -> {
+                            try {
+                                BoziPcGames.play(this, game);
+                            } catch (android.content.ActivityNotFoundException e) {
+                                statusLine.setText("Движок не отвечает — переустановите его.");
+                            }
+                        });
+            }
+        }
+    }
+
+    private void installEngine(TextView action) {
+        if (engineBusy || engine == null) return;
+        engineBusy = true;
+        action.setText("Готовим…");
+        final BoziApi.Game target = engine;
+        new Thread(() -> {
+            try {
+                BoziApi api = new BoziApi(this);
+                java.io.File apk = BoziPcGames.download(this, api, target, (done, total) -> {
+                    int pct = total > 0 ? (int) (done * 100 / total) : 0;
+                    ui.post(() -> action.setText(pct + "%"));
+                });
+                ui.post(() -> {
+                    engineBusy = false;
+                    action.setText("Установить");
+                    if (!BoziPcGames.openInstaller(this, apk)) {
+                        statusLine.setText("Разрешите BOZI устанавливать приложения и нажмите «Установить» ещё раз.");
+                    }
+                });
+            } catch (Exception e) {
+                String text = BoziAuthActivity.message(e);
+                ui.post(() -> {
+                    engineBusy = false;
+                    action.setText("Повторить");
+                    statusLine.setText(text);
+                });
+            }
+        }, "bozi-engine").start();
     }
 
     /** Делает игру текущей и запускает её. */

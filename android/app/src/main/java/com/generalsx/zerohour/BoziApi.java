@@ -237,6 +237,8 @@ public final class BoziApi {
          * сборка является.
          */
         public boolean needsBase;
+        /** Версия служебного файла (для движка — versionCode APK). */
+        public long version;
 
         public String sizeText() {
             if (sizeBytes <= 0) return "";
@@ -249,8 +251,15 @@ public final class BoziApi {
         List<Game> out = new ArrayList<>();
         collect(out, res.optJSONArray("builds"), false);
         collect(out, res.optJSONArray("addons"), true);
+        List<Game> extras = new ArrayList<>();
+        collect(extras, res.optJSONArray("extras"), false);
+        engine = null;
+        for (Game g : extras) if (BoziPcGames.ENGINE_ID.equals(g.id)) engine = g;
         return out;
     }
+
+    /** Движок компьютерных игр из последнего ответа каталога; null — не выложен. */
+    public Game engine;
 
     private static void collect(List<Game> out, JSONArray array, boolean addon) {
         if (array == null) return;
@@ -266,6 +275,7 @@ public final class BoziApi {
             g.unpackedMb = o.optLong("unpackedMb", 0);
             g.ready = o.optBoolean("ready", false);
             g.needsBase = o.optBoolean("needsBase", false);
+            g.version = o.optLong("version", 0);
             g.addon = addon;
             out.add(g);
         }
