@@ -111,6 +111,28 @@ public final class BoziApi {
         return out;
     }
 
+    /** Картинка обложки игры (до 5 МБ). */
+    public byte[] cover(String name) throws IOException {
+        HttpURLConnection conn = open("/v1/covers/" + name, READ_TIMEOUT_MS);
+        try {
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                throw new IOException("обложка: сервер ответил " + conn.getResponseCode());
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            try (java.io.InputStream in = conn.getInputStream()) {
+                byte[] buf = new byte[1 << 15];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (out.size() > (6 << 20)) throw new IOException("обложка слишком большая");
+                }
+            }
+            return out.toByteArray();
+        } finally {
+            conn.disconnect();
+        }
+    }
+
     private HttpURLConnection open(String path, int readTimeout) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(base + path).openConnection();
         if (conn instanceof HttpsURLConnection) {
@@ -243,6 +265,8 @@ public final class BoziApi {
         public String sha256 = "";
         /** Для компьютерной игры из админки: как запускать (JSON от агента). */
         public String manifest = "";
+        /** Обложка: имя на сервере («pc-x.jpg?v=…»), пусто — нет. */
+        public String cover = "";
 
         public String sizeText() {
             if (sizeBytes <= 0) return "";
@@ -286,6 +310,7 @@ public final class BoziApi {
             g.needsBase = o.optBoolean("needsBase", false);
             g.version = o.optLong("version", 0);
             g.sha256 = o.optString("sha256", "");
+            g.cover = o.optString("cover", "");
             JSONObject manifest = o.optJSONObject("manifest");
             g.manifest = manifest != null ? manifest.toString() : "";
             g.addon = addon;

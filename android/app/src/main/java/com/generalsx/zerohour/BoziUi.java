@@ -287,7 +287,10 @@ final class BoziUi {
         card.setPadding(pad, pad, pad, pad);
         parent.addView(card, params(a, 0, 11));
 
-        View thumb = new View(a);
+        // Квадрат слева — место под обложку (BoziCovers ставит картинку).
+        android.widget.ImageView thumb = new android.widget.ImageView(a);
+        thumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        thumb.setClipToOutline(true);
         GradientDrawable thumbBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[] { Color.parseColor("#1b222a"), Color.parseColor("#181e25") });
         thumbBg.setCornerRadius(dp(a, 14));

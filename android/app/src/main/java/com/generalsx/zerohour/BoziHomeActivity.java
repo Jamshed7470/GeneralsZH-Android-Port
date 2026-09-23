@@ -49,6 +49,8 @@ public class BoziHomeActivity extends Activity {
     /** Движок компьютерных игр на сервере; null — не выложен или каталог не загружен. */
     private BoziApi.Game engine;
     private boolean engineBusy;
+    /** Когда последний раз спрашивали каталог: новые игры из админки появляются без перезапуска. */
+    private long catalogLoadedAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +69,11 @@ public class BoziHomeActivity extends Activity {
         refreshPlayButton();
         // Вернулись из системной установки движка — показать «Играть».
         if (pcBox != null) showPcGames();
+        // Админ мог добавить игру, пока BOZI был открыт: тихо обновляем
+        // список, но не чаще раза в минуту и не посреди установки.
+        if (catalogLoadedAt > 0 && !installing && System.currentTimeMillis() - catalogLoadedAt > 60_000) {
+            loadCatalog();
+        }
         if (pendingLaunchAfterPermission && haveUserDataAccess()) {
             pendingLaunchAfterPermission = false;
             launchGame();
@@ -159,7 +166,8 @@ public class BoziHomeActivity extends Activity {
     }
 
     private void loadCatalog() {
-        BoziUi.label(this, catalogBox, "Загружаем список игр…", BoziUi.MUTED);
+        catalogLoadedAt = System.currentTimeMillis();
+        if (catalog.isEmpty()) BoziUi.label(this, catalogBox, "Загружаем список игр…", BoziUi.MUTED);
         new Thread(() -> {
             try {
                 BoziApi api = new BoziApi(this);
@@ -198,6 +206,7 @@ public class BoziHomeActivity extends Activity {
             return;
         }
         for (BoziApi.Game game : catalog) {
+            int cardIndex = catalogBox.getChildCount();
             boolean installed = BoziInstall.installed(this, game.addon ? game.base : game.id);
             String size = game.sizeText();
             String subtitle = game.subtitle.isEmpty() ? size : game.subtitle;
@@ -225,6 +234,7 @@ public class BoziHomeActivity extends Activity {
                 TextView action = (TextView) card.getChildAt(card.getChildCount() - 1);
                 action.setOnClickListener(v -> startInstall(game, action));
             }
+            BoziCovers.apply(this, catalogBox.getChildAt(cardIndex), game.cover);
         }
     }
 
@@ -263,6 +273,7 @@ public class BoziHomeActivity extends Activity {
         // Игры из админки: качаются с нашего сервера, запускает движок.
         boolean engineReady = have >= BoziPcGames.SERVER_GAMES_MIN_ENGINE && !outdated;
         for (BoziApi.Game game : pcServerGames) {
+            int cardIndex = pcBox.getChildCount();
             String size = game.sizeText();
             if (!engineReady) {
                 boolean available = engine != null && engine.ready;
@@ -272,6 +283,7 @@ public class BoziHomeActivity extends Activity {
                         available, null);
                 TextView action = (TextView) card.getChildAt(card.getChildCount() - 1);
                 if (available) action.setOnClickListener(v -> installEngine(action));
+                BoziCovers.apply(this, pcBox.getChildAt(cardIndex), game.cover);
                 continue;
             }
             BoziUi.gameCard(this, pcBox, game.title, game.subtitle,
@@ -283,6 +295,7 @@ public class BoziHomeActivity extends Activity {
                             statusLine.setText("Движок не отвечает — переустановите его.");
                         }
                     });
+            BoziCovers.apply(this, pcBox.getChildAt(cardIndex), game.cover);
         }
     }
 
